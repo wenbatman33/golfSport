@@ -333,7 +333,7 @@
   .g-tut { grid-template-columns: 1fr; gap: 22px; padding: 22px 16px 4px; } .g-tut > div { padding: 22px 14px 10px; } .g-tut b { margin-top: 10px; font-size: 16px; }
   .g-holeCard { right: .6em; top: calc(max(1em, env(safe-area-inset-top)) + 3.9em); } #g-course { display: none; }
   #g-quit { right: .6em; }
-  #g-map { right: .6em; top: calc(max(1em, env(safe-area-inset-top)) + 9.6em); width: 7em; height: 11.5em; }
+  #g-map { right: .6em; top: calc(max(1em, env(safe-area-inset-top)) + 9.6em); width: 9.6em; height: 16em; }
   .g-left { left: .6em; bottom: calc(max(1em, env(safe-area-inset-bottom)) + 5.6em); flex-direction: column; align-items: flex-start; }
   .g-right { right: .6em; bottom: calc(max(1em, env(safe-area-inset-bottom)) + 5.6em); flex-direction: column; align-items: flex-end; }
   .g-gauge { left: .9em; right: .9em; width: auto; transform: none; bottom: max(1.2em, env(safe-area-inset-bottom)); }

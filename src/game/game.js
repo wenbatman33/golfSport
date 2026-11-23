@@ -1086,7 +1086,7 @@ export async function startGame({ character, course, onExit }) {
       const back = putt ? L.puttBack * pk : L.back, up = putt ? L.puttUp * pk : L.up;
       camPosT.copy(ball.pos).addScaledVector(aimDir, -back).addScaledVector(right, putt ? 0.5 : L.side);
       camPosT.y = Math.max(hole.heightAt(camPosT.x, camPosT.z) + 1.2, ball.pos.y + up);
-      camLookT.copy(ball.pos).addScaledVector(aimDir, putt ? Math.min(pd * 0.5, 6) : L.look);
+      camLookT.copy(ball.pos).addScaledVector(aimDir, putt ? Math.min(pd * (L.puttLook ?? 0.5), L.puttLook ? 10 : 6) : L.look); // 推桿時看向洞口那一側，前方的線才在畫面中央
       camLookT.y = hole.heightAt(camLookT.x, camLookT.z) + (putt ? 0.5 : 1.5);
       if (devScrub >= 0) golfer.setSwing(devScrub);
       // 風向箭頭（相對於瞄準方向）

@@ -44,7 +44,8 @@ export function pickLayoutKey() {
 // 遊戲中的鏡頭（依裝置分開）：DEV 工具（D 鍵）可調
 export const GAME = {
   PC: { viewShift: 0.12, fov: 48, back: 7.5, up: 2.7, side: 1.5, look: 34, puttBack: 5.2, puttUp: 2.3, flyBack: 9, flyUp: 3.4 },
-  MOBILE: { viewShift: 0.2, fov: 64, back: 9.5, up: 3.6, side: 0.5, look: 34, puttBack: 7, puttUp: 3, flyBack: 11, flyUp: 4.2 },
+  // 手機直向：用較窄的視角（長焦）把前方的球道與旗桿放大，球員放在畫面下方靠左；puttLook 為推桿時鏡頭看向「球到洞口」的幾成處
+  MOBILE: { viewShift: 0.13, fov: 45, back: 8.8, up: 3.0, side: 0.3, look: 40, puttBack: 5.8, puttUp: 2.6, flyBack: 10, flyUp: 3.6, puttLook: 0.9 },
 };
 // 揮桿節奏（秒）
 export const SWING = { back: 0.7, hold: 0.12, down: 0.2, follow: 0.45, puttBack: 0.5, puttDown: 0.28, puttFollow: 0.35, meterUp: 1.05, meterDown: 1.2 };

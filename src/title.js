@@ -13,8 +13,7 @@ export function createTitle({ onStart, isDragMode, onDragLogo }) {
       <img class="tt-mark" src="${BASE}ui/logo.webp" alt="一杆进洞 HOLE IN ONE GOLF" draggable="false">
       <span class="tt-year">2026 巡回赛 · TOUR SEASON</span>
     </div>
-    <button class="tt-start" type="button">开始游戏<small>TEE OFF</small></button>
-    <span class="tt-ver">HOLE IN ONE GOLF · v0.1</span>`;
+    <button class="tt-start" type="button">开始游戏<small>TEE OFF</small></button>`;
 
   const art = el.querySelector('.tt-art');
   const logo = el.querySelector('.tt-logo');

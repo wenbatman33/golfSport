@@ -6,8 +6,8 @@
 export const COURSES = [
   {
     id: 'palm', zh: '椰林湾', en: 'PALM BAY', levelZh: '新手', levelEn: 'BEGINNER', stars: 1,
-    desc: '风平浪静的海湾球场，球道宽阔，适合热身。',
-    seed: 11, amp: 1.5, tree: 'palm',
+    desc: '阳伞与帆船点缀的海湾球场，球道宽阔，适合热身。',
+    seed: 11, amp: 1.5, tree: 'palm', feature: 'beach', extra: 3, tier: { width: 32, wind: [1, 3], water: 0.25, bunkers: [1, 2] },
     theme: {
       skyTop: '#2e8fe0', skyBottom: '#bfe6ff', fog: '#cfeaff', sea: '#1fa3c9', sun: '#fff3d6',
       fairwayA: '#63c04a', fairwayB: '#55b140', rough: '#3d8f36', green: '#8fe06a', fringe: '#72cc52',
@@ -21,8 +21,8 @@ export const COURSES = [
   },
   {
     id: 'coral', zh: '珊瑚海岸', en: 'CORAL COAST', levelZh: '进阶', levelEn: 'ADVANCED', stars: 2,
-    desc: '夕阳下的海岸球场，水障碍与沙坑环伺，海风渐强。',
-    seed: 23, amp: 2.2, tree: 'palm',
+    desc: '夕阳与灯塔下的海岸球场，水障碍环伺，海风渐强。',
+    seed: 23, amp: 2.2, tree: 'palm', feature: 'lighthouse', extra: 3, tier: { width: 29, wind: [3, 6], water: 0.55, bunkers: [2, 3] },
     theme: {
       skyTop: '#f08a4b', skyBottom: '#ffe0b0', fog: '#ffd9b3', sea: '#3d7fb8', sun: '#ffd7a0',
       fairwayA: '#7cbf45', fairwayB: '#6eb03c', rough: '#4f8f34', green: '#a2e068', fringe: '#86cc52',
@@ -39,12 +39,12 @@ export const COURSES = [
   },
   {
     id: 'volcano', zh: '火山岭', en: 'VOLCANO RIDGE', levelZh: '大师', levelEn: 'MASTER', stars: 3,
-    desc: '火山岩上的锦标赛球场，球道狭窄、起伏剧烈、强风不断。',
-    seed: 37, amp: 3.0, tree: 'pine',
+    desc: '熔岩池与玄武岩之间的锦标赛球场，球道狭窄、强风不断。',
+    seed: 37, amp: 3.0, tree: 'pine', feature: 'lava', extra: 9, tier: { width: 24, wind: [4, 8], water: 0.5, bunkers: [2, 4] },
     theme: {
       skyTop: '#5b6fa8', skyBottom: '#f3c6a0', fog: '#d9c2b8', sea: '#35557a', sun: '#ffe2c0',
       fairwayA: '#6aae4a', fairwayB: '#5c9f40', rough: '#5a6b3a', green: '#93d867', fringe: '#79c153',
-      sand: '#d8c8a8', beach: '#5a4a44', water: '#3f7fc0', trunk: '#5a4636', leaf: '#2f6f48',
+      sand: '#d8c8a8', beach: '#5a4a44', water: '#ff5a1a', trunk: '#5a4636', leaf: '#2f6f48',
     },
     holes: [
       { par: 4, len: 340, dog: 14, pinX: -8, width: 25, greenR: 11, bunkers: [[0.6, 18, 7], [0.95, -16, 5]], water: [], wind: [5, 45] },
@@ -59,6 +59,25 @@ export const COURSES = [
     ],
   },
 ];
+
+// 依球場難度自動產生額外的球洞（固定亂數種子，每次都一樣）
+function rng(a) { return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function genHole(r, c, lastPar) {
+  const T = c.tier, R = (a, b) => a + r() * (b - a), I = (a, b) => Math.round(R(a, b)), S = () => (r() < 0.5 ? -1 : 1);
+  let par = r() < 0.27 ? 3 : r() < 0.72 ? 4 : 5;
+  if (par === lastPar && par !== 4) par = 4; // 避免連續兩個短洞或長洞
+  const len = par === 3 ? I(125, 190) : par === 4 ? I(300, 385) : I(440, 510);
+  const width = par === 3 ? 0 : T.width + I(-2, 2), half = width / 2 || 10;
+  const h = { par, len, dog: par === 3 ? 0 : S() * I(8, 26), pinX: S() * I(0, 14), width, greenR: I(10, 13), bunkers: [], water: [], wind: [I(T.wind[0], T.wind[1]), I(0, 359)] };
+  h.bunkers.push([R(0.9, 0.95), S() * I(15, 18), I(5, 6)]); // 果嶺邊沙坑
+  for (let i = 1, n = I(T.bunkers[0], T.bunkers[1]); i < n && par > 3; i++) h.bunkers.push([R(0.38, 0.78), S() * (half + I(4, 8)), I(7, 9)]);
+  if (r() < T.water) h.water.push(par === 3 ? [R(0.45, 0.58), S() * I(0, 6), I(20, 26)] : [R(0.3, 0.8), S() * (half + I(10, 14)), I(12, 16)]);
+  return h;
+}
+for (const c of COURSES) {
+  const r = rng(c.seed * 977 + 5);
+  for (let i = 0; i < c.extra; i++) c.holes.push(genHole(r, c, c.holes[c.holes.length - 1].par));
+}
 
 export const coursePar = (c) => c.holes.reduce((s, h) => s + h.par, 0);
 

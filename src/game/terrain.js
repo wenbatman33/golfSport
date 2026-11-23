@@ -1,6 +1,6 @@
 // 依球洞資料產生 3D 地形：高度場、地表類型、沙坑／水池／果嶺、樹木、旗桿
 import * as THREE from 'three';
-import { grassTexture, greenTexture, sandTexture, waterNormal, palmGeometry, pineGeometry, bushGeometry, rockGeometry, flowerGeometry } from './scenery.js';
+import { grassTexture, greenTexture, sandTexture, waterNormal, palmGeometry, pineGeometry, bushGeometry, rockGeometry, flowerGeometry, buildLandmarks } from './scenery.js';
 
 export const OB_DIST = 58; // 離球道中心線多遠算出界
 const STEP = 2; // 地形網格間距(m)
@@ -159,7 +159,7 @@ export function buildHole(course, index) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(ix);
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, map: opts.map ?? null, normalMap: opts.normalMap ?? null, roughness: opts.rough ?? 0.9, metalness: opts.metal ?? 0, transparent: !!opts.opacity, opacity: opts.opacity ?? 1, polygonOffset: true, polygonOffsetFactor: -2 - yOff * 20, polygonOffsetUnits: -2 }));
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, emissive: opts.emissive ?? '#000000', emissiveIntensity: opts.emissive ? 1.4 : 1, map: opts.map ?? null, normalMap: opts.normalMap ?? null, roughness: opts.rough ?? 0.9, metalness: opts.metal ?? 0, transparent: !!opts.opacity, opacity: opts.opacity ?? 1, polygonOffset: true, polygonOffsetFactor: -2 - yOff * 20, polygonOffsetUnits: -2 }));
     m.receiveShadow = true;
     group.add(m);
     return m;
@@ -170,7 +170,13 @@ export function buildHole(course, index) {
     disc(b.x, b.z, b.r + 0.5, th.fringe, 0.035, null, { map: grassTexture(), uvScale: 5 }); // 沙坑外緣的草唇
     disc(b.x, b.z, b.r, th.sand, 0.045, null, { map: sandTexture(), uvScale: 2.5 });
   }
-  const waterMeshes = waters.map((w) => disc(w.x, w.z, w.r + 1.5, th.water, 0, w.level, { rough: 0.08, metal: 0.3, opacity: 0.88, normalMap: waterNormal(), uvScale: 9 }));
+  const lava = course.feature === 'lava';
+  const waterMeshes = waters.map((w) => {
+    if (lava) disc(w.x, w.z, w.r + 3, '#2a2226', 0.03, null, { rough: 1, uvScale: 4 }); // 熔岩池外圈的焦黑岩石
+    return disc(w.x, w.z, w.r + 1.5, th.water, 0, w.level, lava ? { rough: 0.5, emissive: '#ff4a10', normalMap: waterNormal(), uvScale: 6 } : { rough: 0.08, metal: 0.3, opacity: 0.88, normalMap: waterNormal(), uvScale: 9 });
+  });
+  const landmarks = buildLandmarks(course, { rnd, distPath, heightAt, surfaceAt, pin: pinXZ, pinY: heightAt(pinXZ.x, pinXZ.z), len, greenR, seaLevel, minX, maxX, minZ, maxZ });
+  group.add(landmarks);
   const gridPts = [];
   for (let a = -greenR; a <= greenR; a += 1.5) {
     const half = Math.sqrt(Math.max(0, greenR * greenR - a * a));
@@ -291,5 +297,5 @@ export function buildHole(course, index) {
     group.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
   }
 
-  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, greenGrid, path, bunkers, waters, dispose };
+  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, landmarks, greenGrid, path, bunkers, waters, dispose };
 }

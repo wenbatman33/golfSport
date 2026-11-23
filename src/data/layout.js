@@ -11,7 +11,7 @@ export const LAYOUT = {
   MOBILE: {
     camFov: 34, camDist: 8.0, camHeight: 1.4, targetY: 0.95,
     viewShiftX: 0, viewShiftY: -0.165,
-    title: { artX: 50, artY: 10, logoX: 3, logoY: 15, logoW: 94, startY: 5 },
+    title: { artX: 27, artY: 10, logoX: 3, logoY: 15, logoW: 94, startY: 5 },
   },
 };
 

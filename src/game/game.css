@@ -39,6 +39,24 @@
 .g-strokeTag b { font-size: 1.25em; margin: 0 .1em; }
 .g-rival { position: absolute; left: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 3.8em); padding: .25em .8em; font-size: .8em; background: rgba(38, 52, 60, .72); color: #fff; border-radius: 99px; }
 .g-rival b { margin-left: .5em; color: var(--yellow); }
+.g-points { position: absolute; left: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 5.9em); padding: .2em .8em; border-radius: 99px; background: rgba(251, 248, 239, .9); color: var(--green2); font-size: .74em; font-weight: 700; letter-spacing: .04em; }
+.g-award { position: absolute; left: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 8.2em); display: flex; align-items: baseline; gap: .5em; padding: .3em 1em .3em .8em; border-radius: 99px; background: var(--green2); color: #fff; font-weight: 700; border-bottom: 2px solid var(--gold); opacity: 0; pointer-events: none; }
+.g-award b { font-size: 1.3em; color: #f3dc9a; }
+.g-award small { font-size: .66em; letter-spacing: .12em; opacity: .85; }
+.g-award.show { animation: g-award 2.4s ease-out both; }
+@keyframes g-award { 0% { opacity: 0; transform: translateX(-20px); } 12%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-10px); } }
+.g-bubble { display: grid; place-items: center; width: 2.2em; height: 2.2em; border-radius: 50% 50% 50% 8px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .25); font-size: 1.5em; opacity: 0; transition: opacity .2s; }
+.g-bubble.show { opacity: 1; }
+#g-fast { position: absolute; right: 1em; bottom: max(1.4em, env(safe-area-inset-bottom)); padding: .6em 1.4em; border: 0; border-radius: 99px; background: var(--card); color: var(--green2); font: 700 1em/1.15 var(--round); cursor: pointer; box-shadow: 0 3px 10px rgba(20, 40, 30, .25); opacity: 0; pointer-events: none; }
+#g-fast small { display: block; font-size: .62em; letter-spacing: .1em; }
+#g-fast.on { background: var(--green); color: #fff; }
+#game[data-ai="1"]:is([data-phase="ai"], [data-phase="swing"], [data-phase="flight"], [data-phase="settle"]) #g-fast { opacity: 1; pointer-events: auto; }
+#game[data-ai="1"] .g-dock { opacity: 0 !important; pointer-events: none; }
+#game[data-ai="1"] .g-dock * { pointer-events: none; }
+#game[data-ai="1"] .g-total { background: var(--blue); }
+#game:is([data-phase="result"], [data-phase="intro"]) :is(.g-points, .g-award) { opacity: 0; }
+.g-vs u { display: block; text-decoration: none; font-size: 11px; color: var(--ink2); margin-top: 2px; }
+.g-table + .g-table { margin-top: 2px; }
 /* 右上：球洞卡 */
 .g-holeCard { position: absolute; right: 10.5em; top: max(1em, env(safe-area-inset-top)); display: grid; grid-template-columns: auto auto; overflow: hidden; }
 .g-holeCard > div { padding: .45em .9em; }
@@ -305,6 +323,7 @@
 @media (max-width: 767px), (orientation: portrait) {
   #g-hud { font-size: clamp(10px, 1.4vh, 14px); }
   .g-player { left: .6em; } .g-pname span { display: none; }
+  .g-points { left: .6em; } .g-award { left: .6em; }
   .g-rival { left: .6em; }
   #g-help { right: 3.7em; } #g-mute { right: 6.8em; }
   .g-right .g-opts { flex-direction: row; } .g-spin, .g-power { width: 6.4em; }

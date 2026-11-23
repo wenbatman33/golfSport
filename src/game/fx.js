@@ -104,9 +104,9 @@ export class Fx {
     else this.emit(pos, { count: Math.round(22 * k), speed: 2, up: 2.8, life: 0.6, size: 0.09, colors: ['#4f9a3a', '#6bbf4c', '#8a6a45'] });
     this.ring(pos, true, 1.2 * k, 0.3, '#ffffff');
   }
-  splash(pos) { // 落水
-    this.emit(pos, { count: 70, speed: 2.2, up: 7, spread: 0.6, gravity: 12, life: 1.0, size: 0.14, colors: ['#ffffff', '#bfe6ff', '#7cc4f5'] });
-    this.ring(pos, true, 4, 0.7, '#dff3ff'); this.ring(pos, true, 2.2, 0.45, '#ffffff');
+  splash(pos, lava = false) { // 落水（或掉進熔岩）
+    this.emit(pos, { count: 70, speed: 2.2, up: 7, spread: 0.6, gravity: 12, life: 1.0, size: 0.14, colors: lava ? ['#ff5a1a', '#ffd23a', '#ff8a3c'] : ['#ffffff', '#bfe6ff', '#7cc4f5'] });
+    this.ring(pos, true, 4, 0.7, lava ? '#ff8a3c' : '#dff3ff'); this.ring(pos, true, 2.2, 0.45, lava ? '#ffd23a' : '#ffffff');
   }
   cupIn(pos) { // 進洞
     this.burst(pos, 0.7);

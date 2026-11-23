@@ -198,6 +198,67 @@ export function buildBackdrop(course, seaLevel) {
   return g;
 }
 
+// 各球場的特色地標：椰林湾＝陽傘與帆船、珊瑚海岸＝燈塔與礁岩、火山岭＝玄武岩石柱
+export function buildLandmarks(course, H) {
+  const g = new THREE.Group(), r = H.rnd, parts = [];
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true });
+  const add = (geo, hex, x, y, z, jitter = 0.06) => { const o = prep(geo); o.translate(x, y, z); parts.push(paint(o, hex, jitter, r)); };
+  // 在離球道中心線 lo~hi 的範圍內找一個點
+  const spot = (lo, hi, tries = 60) => { for (let i = 0; i < tries; i++) { const x = H.minX + r() * (H.maxX - H.minX), z = H.minZ + r() * (H.maxZ - H.minZ), d = H.distPath(x, z).d; if (d >= lo && d <= hi) return { x, z, d }; } return null; };
+  const sea = H.seaLevel;
+
+  if (course.feature === 'beach') {
+    const stripes = [['#ff5a5a', '#ffffff'], ['#3aa0e0', '#ffffff'], ['#ffd23a', '#ffffff'], ['#ff8a3c', '#fff3d6']];
+    for (let i = 0; i < 9; i++) { // 沙灘遮陽傘
+      const p = spot(51, 56); if (!p) continue;
+      const y = H.heightAt(p.x, p.z), [c1, c2] = stripes[i % stripes.length];
+      add(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6), '#f4f1e6', p.x, y + 1.2, p.z);
+      for (let k = 0; k < 8; k++) { const seg = new THREE.ConeGeometry(1.7, 0.7, 8, 1, true, (k / 8) * Math.PI * 2, Math.PI / 4); add(seg, k % 2 ? c1 : c2, p.x, y + 2.5, p.z, 0.02); }
+      const towel = new THREE.BoxGeometry(0.9, 0.05, 1.9); towel.rotateY(r() * 3); add(towel, c1, p.x + 1.4, y + 0.05, p.z + 0.6, 0.03);
+    }
+    for (let i = 0; i < 6; i++) { // 帆船
+      const p = spot(85, 170, 200) || { x: H.maxX + 60 + i * 30, z: H.len * r() }, a = r() * 6.28;
+      const hull = new THREE.BoxGeometry(5.5, 1.1, 1.8); hull.rotateY(a); add(hull, i % 2 ? '#ffffff' : '#2463c9', p.x, sea + 0.5, p.z, 0.03);
+      const mast = new THREE.CylinderGeometry(0.08, 0.08, 7, 5); add(mast, '#8a6a45', p.x, sea + 4.4, p.z);
+      const sail = new THREE.ConeGeometry(2.3, 6, 3, 1); sail.scale(1, 1, 0.12); sail.rotateY(a); add(sail, '#fff8ec', p.x, sea + 4.6, p.z, 0.02);
+    }
+  } else if (course.feature === 'lighthouse') {
+    // 果嶺旁的紅白燈塔
+    let lp = null;
+    for (let i = 0; i < 80 && !lp; i++) { const a = r() * 6.28, x = H.pin.x + Math.cos(a) * 34, z = H.pin.z + Math.sin(a) * 34, d = H.distPath(x, z).d; if (d > 30 && d < 50 && H.surfaceAt(x, z) === 'rough') lp = { x, z }; }
+    if (lp) {
+      const y = H.heightAt(lp.x, lp.z);
+      add(new THREE.CylinderGeometry(3.4, 3.8, 1.2, 12), '#8f8a84', lp.x, y + 0.5, lp.z);
+      for (let k = 0; k < 5; k++) add(new THREE.CylinderGeometry(2.3 - k * 0.2, 2.5 - k * 0.2, 3.2, 14), k % 2 ? '#ffffff' : '#e23b30', lp.x, y + 2.6 + k * 3.2, lp.z, 0.02);
+      add(new THREE.CylinderGeometry(2.2, 2.2, 0.35, 14), '#3a3a40', lp.x, y + 17.3, lp.z);
+      add(new THREE.ConeGeometry(1.7, 1.8, 10), '#e23b30', lp.x, y + 20.4, lp.z, 0.02);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2, 10), new THREE.MeshBasicMaterial({ color: '#fff2b0', fog: false }));
+      lamp.position.set(lp.x, y + 18.5, lp.z); g.add(lamp);
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(7, 60, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#fff2b0', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending }));
+      beam.geometry.rotateZ(Math.PI / 2); beam.geometry.translate(30, 0, 0);
+      beam.position.set(lp.x, y + 18.5, lp.z); g.add(beam);
+      g.userData.spin = beam;
+    }
+    for (let i = 0; i < 9; i++) { // 海上的礁岩
+      const p = spot(72, 130, 200); if (!p) continue;
+      const h = 6 + r() * 12, rock = new THREE.CylinderGeometry(1.2 + r() * 1.5, 3 + r() * 3, h, 6, 2), pp = rock.attributes.position;
+      for (let k = 0; k < pp.count; k++) { const j = 0.8 + r() * 0.4; pp.setX(k, pp.getX(k) * j); pp.setZ(k, pp.getZ(k) * j); }
+      add(rock, '#8a6f62', p.x, sea + h / 2 - 1, p.z, 0.18);
+    }
+  } else if (course.feature === 'lava') {
+    for (let i = 0; i < 26; i++) { // 玄武岩石柱群
+      const p = spot(38, 58); if (!p || H.surfaceAt(p.x, p.z) !== 'rough') continue;
+      const y = H.heightAt(p.x, p.z);
+      for (let k = 0, n = 3 + Math.floor(r() * 4); k < n; k++) {
+        const h = 2 + r() * 7, col = new THREE.CylinderGeometry(0.7, 0.75, h, 6);
+        add(col, r() < 0.15 ? '#5a3a2e' : '#3b3438', p.x + (r() - 0.5) * 2.6, y + h / 2 - 0.4, p.z + (r() - 0.5) * 2.6, 0.2);
+      }
+    }
+  }
+  if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts.map((o) => { o.computeVertexNormals(); return o; })), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
+  return g;
+}
+
 // 手繪天空：把全景圖貼到天空球上，左右鏡射避免接縫
 export function loadSky(course, skyMesh, onLoaded) {
   new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}ui/sky_${course.id}.webp`, (t) => {

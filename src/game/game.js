@@ -408,7 +408,11 @@ export async function startGame({ character, course, onExit }) {
   function askCaddie() {
     const d = distToPin(), list = clubs.map((c, i) => [c, i]).filter(([c]) => !c.putter);
     caddie.notes = [];
-    if (!list.length) { caddie.idx = 0; caddie.power = clamp(planFor(clubs[0]), 0.05, 1); caddie.plays = d; }
+    caddie.yaw = null;
+    if (!list.length) { // 果嶺上：試推找出「瞄哪裡、用多少力」會進洞
+      const r = readPutt(); caddie.idx = 0; caddie.power = r.power; caddie.yaw = r.yaw; caddie.side = r.side; caddie.plays = d;
+      const dh = hole.pin.y - ball.pos.y; if (dh > 0.12) caddie.notes.push('上坡'); else if (dh < -0.12) caddie.notes.push('下坡');
+    }
     else {
       // 先用平地無風的距離估一支，再往長桿／短桿微調：選「到得了」的最短桿（接近滿揮最好控制）
       let k = 0; for (let i = 0; i < list.length; i++) if (clubMax(list[i][0]) >= d * 0.96) k = i;
@@ -424,9 +428,37 @@ export async function startGame({ character, course, onExit }) {
       if (p > 1) caddie.notes.push('够不到，先打近');
     }
   }
+  // —— 推桿模擬與讀線 ——
+  const simBall = new Ball(), simDir = new THREE.Vector3();
+  function simPutt(y, power) {
+    simBall.place(ball.pos); simBall.acc = 0;
+    simBall.putt(simDir.set(Math.sin(y), 0, Math.cos(y)), puttSpeedFor(puttMax() * power));
+    const pts = [ball.pos.clone()]; let ev = null;
+    for (let i = 0; i < 720 && !ev; i++) { ev = simBall.update(1 / 60, hole, wind); if (i % 3 === 0 || ev) pts.push(simBall.pos.clone()); }
+    return { pts, ev, miss: Math.hypot(simBall.pos.x - hole.pin.x, simBall.pos.z - hole.pin.z) };
+  }
+  function readPutt() {
+    const y0 = Math.atan2(hole.pin.x - ball.pos.x, hole.pin.z - ball.pos.z), d = distToPin();
+    const base = clamp((d * 1.07 + Math.max(0, hole.pin.y - ball.pos.y) * 9) / puttMax(), 0.05, 1);
+    let best = null;
+    search: for (const pf of [1, 1.1, 0.92, 1.2, 0.85, 1.32]) for (let k = 0; k <= 30; k++) { // 先試直線，再往兩邊一點一點偏
+      const dy = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.012, p = clamp(base * pf, 0.05, 1), r = simPutt(y0 + dy, p);
+      if (r.ev === 'holed') { best = { yaw: y0 + dy, power: p, miss: 0 }; break search; }
+      if (!best || r.miss < best.miss) best = { yaw: y0 + dy, power: p, miss: r.miss };
+    }
+    best.side = Math.tan(best.yaw - y0) * d; // 瞄準點在洞口旁多遠（正值＝左邊）
+    return best;
+  }
+
   function updateCaddieUI() {
     const el = $('g-caddie'), c = clubs[caddie.idx];
     if (!c || P.ai) { el.classList.remove('show'); return; }
+    if (c.putter && caddie.yaw != null) { // 果嶺上：告訴玩家瞄哪裡、用多少力
+      const cm = Math.round(Math.abs(caddie.side) * 100), same = clubIdx === caddie.idx && Math.abs(yaw - caddie.yaw) < 0.004;
+      el.innerHTML = `<span>杆弟 CADDIE</span><b>PT</b><em>力量 ${Math.round(caddie.power * 100)}%</em><i>${cm < 3 ? '直推洞口' : `瞄洞口${caddie.side > 0 ? '左' : '右'}侧 ${cm} cm`}</i>${caddie.notes.length ? `<i>${caddie.notes.join('·')}</i>` : ''}<i class="lg">格线 红高·蓝低</i>${same ? '' : '<u>采用 USE</u>'}`;
+      el.classList.toggle('alt', !same); el.classList.add('show');
+      return;
+    }
     const d = distToPin(), diff = Math.round(caddie.plays - d), same = clubIdx === caddie.idx;
     const play = c.putter || Math.abs(diff) < 2 || caddie.notes.includes('够不到，先打近') ? '' : `<i>${caddie.notes.filter((n) => n !== '够不到，先打近').join('·') || '修正'} ${diff > 0 ? '+' : ''}${diff} m</i>`;
     el.innerHTML = `<span>杆弟 CADDIE</span><b>${c.id}</b><em>${c.zh} · 力量 ${Math.round(caddie.power * 100)}%</em>${play}${caddie.notes.includes('够不到，先打近') ? '<i>够不到，先打近</i>' : ''}${same ? '' : '<u>采用 USE</u>'}`;
@@ -455,7 +487,7 @@ export async function startGame({ character, course, onExit }) {
     $('g-clubDist').textContent = `${far.toFixed(far < 20 ? 1 : 0)} m`;
     $('g-tick2').textContent = `${far.toFixed(far < 20 ? 1 : 0)} m`;
     $('g-tick1').textContent = `${(far / 2).toFixed(far < 20 ? 1 : 0)} m`;
-    hole.greenGrid.visible = !!c.putter;
+    hole.greenGrid.visible = hole.greenFlow.points.visible = !!c.putter;
     $('g-clubPrev').disabled = $('g-clubNext').disabled = clubs.length < 2;
     golfer.place(ball.pos, aimDir.set(Math.sin(yaw), 0, Math.cos(yaw)), !!c.putter, hole.heightAt);
     previewDirty = true;
@@ -469,8 +501,10 @@ export async function startGame({ character, course, onExit }) {
     aimDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     let pts;
     if (c.putter) {
-      const n = 24, L = puttMax();
-      pts = Array.from({ length: n + 1 }, (_, i) => { const x = ball.pos.x + aimDir.x * (L * i) / n, z = ball.pos.z + aimDir.z * (L * i) / n; return new THREE.Vector3(x, hole.heightAt(x, z) + 0.06, z); });
+      // 推桿預測線：用建議力量（或已經定下的力量）實際滾一次，線會照坡度彎
+      pts = simPutt(yaw, meter.mode === 'down' || meter.mode === 'done' ? meter.power : needCache).pts.map((p) => p.setY(p.y + 0.05));
+      if (pts.length < 2) pts.push(pts[0].clone().addScaledVector(aimDir, 0.3));
+      updateCaddieUI();
     } else pts = previewFlight(ball.pos, aimDir, solveSpeed(clubMax(c), c.loft), c.loft, hole, wind);
     aimLine.geometry.dispose();
     aimLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
@@ -517,11 +551,26 @@ export async function startGame({ character, course, onExit }) {
   const tutorSeen = () => { try { return localStorage.getItem('golf_tutor_v1') === '1'; } catch { return true; } };
   function showTutor() { tutorOpen = true; $('g-tutor').hidden = false; }
   function hideTutor() { tutorOpen = false; $('g-tutor').hidden = true; try { localStorage.setItem('golf_tutor_v1', '1'); } catch {} }
-  function pressSwing() {
+  // 擊球輸入：一次「按下」只算一下。三道保險，避免滑鼠一次點擊被算成兩下——
+  //  1. 還沒放開就不接受下一次按下（有些裝置按住時會重複送出按下事件）
+  //  2. 放開後 110 毫秒內不接受新的按下（放開瞬間的彈跳）
+  //  3. 兩次之間至少隔 250 毫秒（微動開關連點、觸控板連點）
+  let lastPress = 0, lastRelease = 0, held = false;
+  const releaseSwing = () => { if (held) { held = false; lastRelease = performance.now(); } };
+  const downSpeed = () => (1 / SWING.meterDown) * (1.5 - stats.accuracy * 0.045);
+  function pressSwing(fromInput = false) {
     if (phase !== 'aim' || tutorOpen || P.ai) return;
+    const now = performance.now();
+    if (fromInput) { if (held || now - lastPress < 250 || now - lastRelease < 110) return; held = true; }
+    lastPress = now;
     sfx.unlock();
     if (meter.mode === 'idle') { meter.mode = 'up'; meter.pos = 0; sfx.tick(); }
-    else if (meter.mode === 'up') { meter.power = clamp(meter.pos, 0.06, 1); meter.mode = 'down'; sfx.meterSet(); }
+    else if (meter.mode === 'up') {
+      meter.power = clamp(meter.pos, 0.06, 1); meter.mode = 'down'; sfx.meterSet();
+      // 定完力量後，游標回到擊球點至少要 0.6 秒：力量小的時候不會「才按完就已經過頭」
+      meter.pos = Math.max(meter.power, 0.22);
+      meter.vDown = Math.min(downSpeed(), (meter.pos - 0.1) / 0.6);
+    }
     else if (meter.mode === 'down') finishMeter(meter.pos);
     updateMeterUI();
   }
@@ -880,7 +929,8 @@ export async function startGame({ character, course, onExit }) {
   const keys = {};
   function onKey(e) {
     if (e.type === 'keydown') {
-      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) pressSwing(); }
+      if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); document.activeElement?.blur?.(); } // 空白鍵／Enter 不要再去「按」上一顆點過的按鈕
+      if (e.code === 'Space') { if (!e.repeat) pressSwing(true); }
       if (phase === 'aim' && meter.mode === 'idle') {
         if (e.code === 'ArrowUp') changeClub(-1);
         if (e.code === 'ArrowDown') changeClub(1);
@@ -888,6 +938,8 @@ export async function startGame({ character, course, onExit }) {
       if (e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey) toggleDev();
       if (e.key.toLowerCase() === 'm' && !e.metaKey && !e.ctrlKey) toggleMute();
     }
+    if (e.type === 'keyup' && e.code === 'Space') releaseSwing();
+    if (e.type === 'keyup' && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault(); // 按鈕是在放開空白鍵時被觸發的，這裡也要擋
     keys[e.code] = e.type === 'keydown';
   }
   function changeClub(d) {
@@ -905,10 +957,24 @@ export async function startGame({ character, course, onExit }) {
   const endDrag = () => { drag = null; };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
+  // 滑鼠點按鈕時不讓它拿到鍵盤焦點（照樣會觸發 click），之後按空白鍵才不會連帶再按一次
+  const noFocus = (e) => { if (e.target.closest?.('button')) e.preventDefault(); };
+  root.addEventListener('mousedown', noFocus);
+  // 防連點：任何按鈕在 280 毫秒內的第二次點擊一律忽略（滑鼠微動開關彈跳、觸控板連點、雙擊）
+  let lastClick = 0;
+  root.addEventListener('click', (e) => {
+    if (!e.target.closest?.('button, #g-map, #g-ov, #g-caddie, #g-clubIcon, #g-clubId')) return;
+    const now = performance.now();
+    if (now - lastClick < 280) { e.stopImmediatePropagation(); e.preventDefault(); return; }
+    lastClick = now;
+  }, true);
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
-  $('g-swing').addEventListener('pointerdown', (e) => { e.preventDefault(); pressSwing(); });
-  $('g-meter').addEventListener('pointerdown', (e) => { e.preventDefault(); pressSwing(); });
+  // 擊球要抓時機，所以在「按下」的瞬間就算一下（放開不算）；只認滑鼠左鍵或第一根手指
+  const tapSwing = (e) => { e.preventDefault(); if (e.button !== 0 || e.isPrimary === false) return; pressSwing(true); };
+  for (const t of ['pointerup', 'pointercancel', 'blur']) window.addEventListener(t, releaseSwing);
+  $('g-swing').addEventListener('pointerdown', tapSwing);
+  $('g-meter').addEventListener('pointerdown', tapSwing);
   $('g-clubPrev').onclick = () => changeClub(-1);
   $('g-clubNext').onclick = () => changeClub(1);
   const applyMute = () => { $('g-mute').classList.toggle('off', isMuted()); setSfxMuted(isMuted()); };
@@ -919,11 +985,12 @@ export async function startGame({ character, course, onExit }) {
   $('g-help').onclick = showTutor;
   $('g-tutorOk').onclick = hideTutor;
   for (const b of root.querySelectorAll('#g-spin button')) b.onclick = () => { if (phase === 'aim' && meter.mode === 'idle') { spinMode = +b.dataset.spin; sfx.tick(); updateOptsUI(); } };
-  $('g-map').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); showOverview(true); });
-  $('g-ov').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); showOverview(false); });
+  // 以下控制項統一用 click（按下與放開都在同一個元件上才算一次），不再混用「按下就觸發」
+  $('g-map').addEventListener('click', (e) => { e.stopPropagation(); showOverview(true); });
+  $('g-ov').addEventListener('click', (e) => { e.stopPropagation(); showOverview(false); });
   $('g-power').onclick = () => { if (phase !== 'aim' || meter.mode !== 'idle' || powerLeft <= 0) return; powerShot = !powerShot; sfx.select(); askCaddie(); updateClubUI(); };
-  $('g-caddie').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (phase !== 'aim' || meter.mode !== 'idle' || clubIdx === caddie.idx) return; clubIdx = caddie.idx; sfx.select(); updateClubUI(); });
-  for (const id of ['g-clubIcon', 'g-clubId']) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); openBag($('g-bag').hidden); });
+  $('g-caddie').addEventListener('click', (e) => { e.stopPropagation(); if (phase !== 'aim' || meter.mode !== 'idle') return; const putt = clubs[caddie.idx]?.putter && caddie.yaw != null; if (clubIdx === caddie.idx && !putt) return; clubIdx = caddie.idx; if (putt) yaw = caddie.yaw; sfx.select(); updateClubUI(); });
+  for (const id of ['g-clubIcon', 'g-clubId']) $(id).addEventListener('click', (e) => { e.stopPropagation(); openBag($('g-bag').hidden); });
   $('g-quit').onclick = () => { if (phase === 'result' || window.confirm('确定退出本局？ QUIT THIS ROUND?')) exit(); };
 
   function resize() {
@@ -1003,10 +1070,10 @@ export async function startGame({ character, course, onExit }) {
         if (keys.ArrowRight) { yaw -= sp * dt; previewDirty = true; }
       } else if (meter.mode === 'up') {
         meter.pos += dt / SWING.meterUp;
-        if (meter.pos >= 1) { meter.pos = 1; meter.power = 1; meter.mode = 'down'; }
+        if (meter.pos >= 1) { meter.pos = 1; meter.power = 1; meter.mode = 'down'; meter.vDown = downSpeed(); }
         updateMeterUI();
       } else if (meter.mode === 'down') {
-        meter.pos -= (dt / SWING.meterDown) * (1.5 - stats.accuracy * 0.045);
+        meter.pos -= dt * (meter.vDown || downSpeed());
         if (meter.pos <= -0.1) finishMeter(-0.1);
         updateMeterUI();
       }
@@ -1153,6 +1220,7 @@ export async function startGame({ character, course, onExit }) {
     }
     waterNormal().offset.set(clock.elapsedTime * 0.012, clock.elapsedTime * 0.008); // 熔岩流動
     waterEnv.time.value = clock.elapsedTime; // 海與水坑的水波
+    if (hole && hole.greenFlow.points.visible) hole.greenFlow.update(dt);
     backdrop?.userData.update(clock.elapsedTime);
     fx.update(dt, camera, root.clientHeight);
     // 場景中的標記：旗桿（距離與高低差）、落點
@@ -1172,6 +1240,7 @@ export async function startGame({ character, course, onExit }) {
     renderer.setAnimationLoop(null);
     window.removeEventListener('resize', resize);
     window.removeEventListener('keydown', onKey);
+    for (const t of ['pointerup', 'pointercancel', 'blur']) window.removeEventListener(t, releaseSwing);
     window.removeEventListener('keyup', onKey);
     gui?.destroy();
     hole?.dispose(); golfer.dispose();

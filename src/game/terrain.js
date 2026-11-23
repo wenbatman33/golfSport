@@ -60,7 +60,10 @@ export function buildHole(course, index) {
   function trueHeight(x, z) {
     let h = raw(x, z);
     const dPin = Math.hypot(x - pinXZ.x, z - pinXZ.z);
-    h = mix(h, hPin + gx * (x - pinXZ.x) + gz * (z - pinXZ.z), smooth(greenR + 12, greenR + 1, dPin));
+    // 果嶺：整體微傾，再疊上兩層大小不同的起伏（洞口周圍 0.6~3 m 內漸漸攤平，球才進得去）
+    const ux = x - pinXZ.x, uz = z - pinXZ.z, gA = inland ? 0.15 : 0.11;
+    const und = gA * (0.6 * Math.sin(ux * 0.42 + s1) * Math.cos(uz * 0.36 + s2) + 0.8 * Math.sin(ux * 0.19 - uz * 0.23 + s3) - 0.8 * Math.sin(s3)) * smooth(0.6, 3, dPin);
+    h = mix(h, hPin + gx * ux + gz * uz + und, smooth(greenR + 12, greenR + 1, dPin));
     h = mix(h, hTee, smooth(16, 6, Math.hypot(x, z)));
     for (const b of bunkers) h -= 0.6 * smooth(b.r, b.r * 0.45, Math.hypot(x - b.x, z - b.z));
     for (const w of waters) h = inland ? mix(h, w.level - 0.8, smooth(w.r + 2.4, w.r - 0.6, Math.hypot(x - w.x, z - w.z))) : mix(h, w.level - 1.3, smooth(w.r + 4, w.r - 2, Math.hypot(x - w.x, z - w.z))); // 內陸的小溪：窄而淺的溝
@@ -200,8 +203,9 @@ export function buildHole(course, index) {
   });
   const landmarks = buildLandmarks(course, { spec, rnd, distPath, heightAt, surfaceAt, pin: pinXZ, pinY: heightAt(pinXZ.x, pinXZ.z), len, greenR, seaLevel, minX, maxX, minZ, maxZ });
   group.add(landmarks);
-  const gridPts = [];
-  for (let a = -greenR; a <= greenR; a += 1.5) {
+  const gridPts = [], gridCol = [], pinH = heightAt(pinXZ.x, pinXZ.z), cHi = new THREE.Color('#ff5a4a'), cLo = new THREE.Color('#4fb6ff'), cMid = new THREE.Color('#ffffff'), cG = new THREE.Color();
+  const gcol = (y) => { const t = clamp((y - 0.075 - pinH) / 0.12, -1, 1); cG.copy(cMid).lerp(t > 0 ? cHi : cLo, Math.abs(t)); gridCol.push(cG.r, cG.g, cG.b); }; // 比洞口高偏紅、比洞口低偏藍
+  for (let a = -greenR; a <= greenR; a += 1) {
     const half = Math.sqrt(Math.max(0, greenR * greenR - a * a));
     for (let b = -half; b < half; b += 0.75) {
       const b2 = Math.min(half, b + 0.75);
@@ -209,9 +213,25 @@ export function buildHole(course, index) {
       gridPts.push(pinXZ.x + b, heightAt(pinXZ.x + b, pinXZ.z + a) + 0.075, pinXZ.z + a, pinXZ.x + b2, heightAt(pinXZ.x + b2, pinXZ.z + a) + 0.075, pinXZ.z + a);
     }
   }
-  const greenGrid = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3)), new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.38, depthWrite: false }));
+  for (let i = 1; i < gridPts.length; i += 3) gcol(gridPts[i]);
+  const greenGrid = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3)).setAttribute('color', new THREE.Float32BufferAttribute(gridCol, 3)), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false }));
   greenGrid.visible = false;
   group.add(greenGrid);
+  // 坡度光點：一顆顆小光點順著坡往低處流，流得越快表示越陡（推桿時才顯示）
+  const FN = 280, fPos = new Float32Array(FN * 3), fLife = new Float32Array(FN);
+  const fSpawn = (i) => { const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * greenR; fPos[i * 3] = pinXZ.x + Math.cos(a) * rr; fPos[i * 3 + 2] = pinXZ.z + Math.sin(a) * rr; fLife[i] = 0.8 + Math.random() * 1.8; };
+  for (let i = 0; i < FN; i++) { fSpawn(i); fPos[i * 3 + 1] = heightAt(fPos[i * 3], fPos[i * 3 + 2]) + 0.09; }
+  const flowPts = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(fPos, 3)), new THREE.PointsMaterial({ color: '#ffffff', size: 0.13, sizeAttenuation: true, transparent: true, opacity: 0.95, depthWrite: false }));
+  flowPts.visible = false; flowPts.frustumCulled = false; group.add(flowPts);
+  const greenFlow = { points: flowPts, update(dt) {
+    for (let i = 0; i < FN; i++) {
+      const x = fPos[i * 3], z = fPos[i * 3 + 2], g = gradAt(x, z);
+      fPos[i * 3] = x - g.x * 16 * dt; fPos[i * 3 + 2] = z - g.z * 16 * dt; fLife[i] -= dt;
+      if (fLife[i] <= 0 || Math.hypot(fPos[i * 3] - pinXZ.x, fPos[i * 3 + 2] - pinXZ.z) > greenR) fSpawn(i);
+      fPos[i * 3 + 1] = heightAt(fPos[i * 3], fPos[i * 3 + 2]) + 0.09;
+    }
+    flowPts.geometry.attributes.position.needsUpdate = true;
+  } };
   const pinY = heightAt(pinXZ.x, pinXZ.z);
   const cup = new THREE.Mesh(new THREE.CircleGeometry(0.13, 24), new THREE.MeshBasicMaterial({ color: '#0b1a12', polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 }));
   cup.rotation.x = -Math.PI / 2;
@@ -277,7 +297,8 @@ export function buildHole(course, index) {
   group.add(trees);
 
   // 灌木、岩石、花叢：點綴在長草區
-  function scatter(geo, count, lo, hi, scaleLo, scaleHi, mat) {
+  const cullable = []; // 會擋住鏡頭的灌木、岩石：{ mesh, list, rad, hidden }
+  function scatter(geo, count, lo, hi, scaleLo, scaleHi, mat, cullR = 0) { // cullR：這種物件的遮擋半徑（乘上個體大小）；0 表示太小不用處理
     const list = [];
     for (let tries = 0; tries < count * 12 && list.length < count; tries++) {
       const x = minX + rnd() * (maxX - minX), z = minZ + rnd() * (maxZ - minZ), dp = distPath(x, z);
@@ -290,12 +311,13 @@ export function buildHole(course, index) {
     list.forEach((t, i) => { q.setFromEuler(new THREE.Euler(0, t.r, 0)); mesh.setMatrixAt(i, m4.compose(tp.set(t.x, t.y - 0.05, t.z), q, sc.setScalar(t.s))); const k = 0.88 + ((t.r * 5.7) % 1) * 0.22; mesh.setColorAt(i, tint.setRGB(k, k, k)); });
     mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
+    if (cullR) cullable.push({ mesh, list, rad: cullR, hidden: new Uint8Array(list.length) });
   }
   const fwHalf = spec.width > 0 ? spec.width / 2 : 10;
   const vegMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
-  scatter(bushGeometry(th, lava ? null : inland ? '#ffd92e' : course.id === 'coral' ? '#ffd0dc' : '#fff3f6'), inland ? 170 : 90, fwHalf + 4, inland ? 68 : 55, 0.8, inland ? 2.4 : 1.9, vegMat); // 林克斯：開黃花的荊豆叢
-  scatter(rockGeometry(lava ? '#4f4548' : '#9a968e', lava ? null : '#6f9a4a'), lava ? 60 : 24, fwHalf + 3, 57, 0.6, 2.0, vegMat);
-  scatter(flowerGeometry(), lava ? 24 : 80, fwHalf + 1.5, 40, 1.0, 1.7, vegMat);
+  scatter(bushGeometry(th, lava ? null : inland ? '#ffd92e' : course.id === 'coral' ? '#ffd0dc' : '#fff3f6'), inland ? 170 : 90, fwHalf + 4, inland ? 68 : 55, 0.8, inland ? 2.4 : 1.9, vegMat, 1.5); // 林克斯：開黃花的荊豆叢
+  scatter(rockGeometry(lava ? '#4f4548' : '#9a968e', lava ? null : '#6f9a4a'), lava ? 60 : 24, fwHalf + 3, 57, 0.6, 2.0, vegMat, 1.3);
+  scatter(flowerGeometry(), lava ? 24 : 80, fwHalf + 1.5, 40, 0.55, 0.95, vegMat);
   scatter(grassTuftGeometry(th), inland ? 520 : 320, fwHalf + 2, inland ? 66 : 50, 0.9, inland ? 2.3 : 1.9, vegMat);
   // 水坑邊的蘆葦與水面上的睡蓮
   if (!lava && !inland && waters.length) {
@@ -326,6 +348,18 @@ export function buildHole(course, index) {
       trees.setMatrixAt(i, h ? zero : treeMatrix(t));
     }
     if (changed) trees.instanceMatrix.needsUpdate = true;
+    // 灌木與岩石也一樣：擋在鏡頭和球員之間（或球員就站在裡面）就先收起來
+    for (const c of cullable) {
+      let ch = false;
+      for (let i = 0; i < c.list.length; i++) {
+        const t = c.list[i], u = clamp(((t.x - a.x) * dx + (t.z - a.z) * dz) / l2, 0, 1);
+        const h = Math.hypot(a.x + dx * u - t.x, a.z + dz * u - t.z) < c.rad * t.s + 0.9 ? 1 : 0;
+        if (h === c.hidden[i]) continue;
+        c.hidden[i] = h; ch = true;
+        if (h) c.mesh.setMatrixAt(i, zero); else { q.setFromEuler(new THREE.Euler(0, t.r, 0)); c.mesh.setMatrixAt(i, m4.compose(tp.set(t.x, t.y - 0.05, t.z), q, sc.setScalar(t.s))); }
+      }
+      if (ch) c.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   const tee = new THREE.Vector3(0, teeY, 0);
@@ -342,5 +376,5 @@ export function buildHole(course, index) {
     group.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
   }
 
-  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, shore, landmarks, greenGrid, path, bunkers, waters, dispose };
+  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, shore, landmarks, greenGrid, greenFlow, path, bunkers, waters, dispose };
 }

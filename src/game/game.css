@@ -442,3 +442,5 @@
 .g-reliefCard button em { grid-area: dist; font-style: normal; font-weight: 700; padding: .3em .8em; border-radius: 99px; background: var(--green); color: #fff; font-size: .86em; white-space: nowrap; }
 .g-reliefCard button.rec { box-shadow: inset 0 0 0 1.5px var(--gold); }
 .g-reliefCard button.rec b::after { content: " ★ 杆弟建议"; font-size: .68em; color: var(--gold); font-weight: 600; }
+
+.g-caddie i.lg { background: linear-gradient(90deg, rgba(255, 90, 74, .22), rgba(79, 182, 255, .25)); color: #2a3a33; }

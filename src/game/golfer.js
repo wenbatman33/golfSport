@@ -62,26 +62,26 @@ export const POSES = {
     flat: [],
   },
   cheerA: {
-    eul: { Spine1: [-6, 0, 0], Head: [-12, 0, 0] },
-    dir: { LeftShoulder: [0.86, 0.5, 0.05, 'Spine2'], RightShoulder: [-0.86, 0.5, 0.05, 'Spine2'], LeftArm: [0.55, 0.82, 0.14, 'Spine2'], LeftForeArm: [0.25, 0.96, 0.1, 'Spine2'], RightArm: [-0.5, 0.85, 0.12, 'Spine2'], RightForeArm: [-0.25, 0.96, 0.1, 'Spine2'] },
+    eul: { Spine1: [-5, 0, 0], Head: [-10, 0, 0] },
+    dir: { LeftShoulder: [0.94, 0.3, 0.05, 'Spine2'], RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], LeftArm: [0.88, 0.3, 0.32, 'Spine2'], LeftForeArm: [0.22, 0.95, 0.2, 'Spine2'], RightArm: [-0.88, 0.3, 0.32, 'Spine2'], RightForeArm: [-0.22, 0.95, 0.2, 'Spine2'] },
     flat: [],
   },
   cheerB: {
-    eul: { Spine1: [-2, 0, 0], Head: [-6, 0, 0] },
-    dir: { LeftShoulder: [0.86, 0.5, 0.05, 'Spine2'], RightShoulder: [-0.86, 0.5, 0.05, 'Spine2'], LeftArm: [0.75, 0.6, 0.2, 'Spine2'], LeftForeArm: [0.1, 0.98, 0.15, 'Spine2'], RightArm: [-0.75, 0.6, 0.2, 'Spine2'], RightForeArm: [-0.1, 0.98, 0.15, 'Spine2'] },
+    eul: { Spine1: [-2, 0, 0], Head: [-5, 0, 0] },
+    dir: { LeftShoulder: [0.96, 0.22, 0.05, 'Spine2'], RightShoulder: [-0.96, 0.22, 0.05, 'Spine2'], LeftArm: [0.9, 0.22, 0.36, 'Spine2'], LeftForeArm: [0.4, 0.88, 0.25, 'Spine2'], RightArm: [-0.9, 0.22, 0.36, 'Spine2'], RightForeArm: [-0.4, 0.88, 0.25, 'Spine2'] },
     flat: [],
   },
   // —— 待機手勢（選角畫面）：每組 A／B 兩個姿勢來回擺動 ——
-  waveA: { eul: { Head: [0, 0, -5] }, dir: { RightShoulder: [-0.9, 0.42, 0.05, 'Spine2'], RightArm: [-0.75, 0.45, 0.25, 'Spine2'], RightForeArm: [-0.15, 0.98, 0.15, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
-  waveB: { eul: { Head: [0, 0, -5] }, dir: { RightShoulder: [-0.9, 0.42, 0.05, 'Spine2'], RightArm: [-0.75, 0.45, 0.25, 'Spine2'], RightForeArm: [-0.72, 0.68, 0.15, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
-  scratchA: { eul: { Head: [8, 0, 8], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.6, 0.5, 0.55, 'Spine2'], RightForeArm: [0.55, 0.78, -0.2, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
-  scratchB: { eul: { Head: [10, 0, 10], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.62, 0.56, 0.5, 'Spine2'], RightForeArm: [0.42, 0.85, -0.3, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
+  waveA: { eul: { Head: [0, 0, -5] }, dir: { RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], RightArm: [-0.86, 0.3, 0.3, 'Spine2'], RightForeArm: [-0.15, 0.98, 0.15, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
+  waveB: { eul: { Head: [0, 0, -5] }, dir: { RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], RightArm: [-0.86, 0.3, 0.3, 'Spine2'], RightForeArm: [-0.6, 0.78, 0.15, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
+  scratchA: { eul: { Head: [8, 0, 8], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.8, 0.15, 0.58, 'Spine2'], RightForeArm: [0.65, 0.72, -0.25, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
+  scratchB: { eul: { Head: [10, 0, 10], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.8, 0.2, 0.56, 'Spine2'], RightForeArm: [0.58, 0.76, -0.3, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
   hipsA: { eul: { Spine1: [0, 10, 0], Head: [0, 14, 0] }, dir: { LeftArm: [0.78, -0.6, -0.15, 'Spine2'], LeftForeArm: [-0.5, -0.6, 0.55, 'Spine2'], RightArm: [-0.78, -0.6, -0.15, 'Spine2'], RightForeArm: [0.5, -0.6, 0.55, 'Spine2'] }, flat: [] },
   hipsB: { eul: { Spine1: [0, -10, 0], Head: [0, -14, 0] }, dir: { LeftArm: [0.78, -0.6, -0.15, 'Spine2'], LeftForeArm: [-0.5, -0.6, 0.55, 'Spine2'], RightArm: [-0.78, -0.6, -0.15, 'Spine2'], RightForeArm: [0.5, -0.6, 0.55, 'Spine2'] }, flat: [] },
-  stretchA: { eul: { Spine1: [-4, 0, 7], Head: [-8, 0, 0] }, dir: { LeftShoulder: [0.86, 0.5, 0.05, 'Spine2'], RightShoulder: [-0.86, 0.5, 0.05, 'Spine2'], LeftArm: [0.36, 0.92, 0.12, 'root'], LeftForeArm: [0.05, 0.99, 0.05, 'root'], RightArm: [-0.3, 0.94, 0.1, 'root'], RightForeArm: [-0.05, 0.99, 0.05, 'root'] }, flat: [] },
-  stretchB: { eul: { Spine1: [-4, 0, -7], Head: [-8, 0, 0] }, dir: { LeftShoulder: [0.86, 0.5, 0.05, 'Spine2'], RightShoulder: [-0.86, 0.5, 0.05, 'Spine2'], LeftArm: [0.36, 0.92, 0.12, 'root'], LeftForeArm: [0.05, 0.99, 0.05, 'root'], RightArm: [-0.3, 0.94, 0.1, 'root'], RightForeArm: [-0.05, 0.99, 0.05, 'root'] }, flat: [] },
-  thinkA: { eul: { Head: [6, -8, 0] }, dir: { RightArm: [-0.2, -0.6, 0.78, 'Spine2'], RightForeArm: [0.42, 0.88, 0.2, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
-  thinkB: { eul: { Head: [2, 10, 4] }, dir: { RightArm: [-0.2, -0.6, 0.78, 'Spine2'], RightForeArm: [0.38, 0.9, 0.22, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
+  stretchA: { eul: { Spine1: [0, 12, 0], Head: [0, 8, 0] }, dir: { RightArm: [0.82, 0.02, 0.57, 'Spine2'], RightForeArm: [0.95, 0.05, 0.3, 'Spine2'], LeftArm: [0.25, -0.62, 0.74, 'Spine2'], LeftForeArm: [-0.6, 0.35, 0.72, 'Spine2'] }, flat: [] },
+  stretchB: { eul: { Spine1: [0, 18, 0], Head: [0, 12, 0] }, dir: { RightArm: [0.88, 0.02, 0.47, 'Spine2'], RightForeArm: [0.98, 0.05, 0.18, 'Spine2'], LeftArm: [0.3, -0.6, 0.74, 'Spine2'], LeftForeArm: [-0.55, 0.38, 0.74, 'Spine2'] }, flat: [] },
+  thinkA: { eul: { Head: [6, -8, 0] }, dir: { RightArm: [-0.05, -0.92, 0.38, 'Spine2'], RightForeArm: [0.35, 0.72, 0.6, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
+  thinkB: { eul: { Head: [2, 10, 4] }, dir: { RightArm: [-0.05, -0.92, 0.38, 'Spine2'], RightForeArm: [0.3, 0.75, 0.6, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
   sad: {
     eul: { Spine: [12, 0, 0], Spine1: [10, 0, 0], Spine2: [8, 0, 0], Neck: [14, 0, 0], Head: [22, 0, 0] },
     dir: { LeftArm: [0.26, -0.94, 0.2, 'Spine2'], LeftForeArm: [0.16, -0.95, 0.27, 'Spine2'], RightArm: [-0.26, -0.94, 0.2, 'Spine2'], RightForeArm: [-0.16, -0.95, 0.27, 'Spine2'] },
@@ -137,7 +137,7 @@ export class Golfer {
     } catch (e) { console.warn('角色模型載入失敗，改用替身', e); }
     if (!model) { this.buildDummy(character); return; }
 
-    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; for (const m of [].concat(o.material)) m.side = THREE.DoubleSide; } }); // 雙面渲染，腋下等處撐開時不會透出背景
     let box = new THREE.Box3().setFromObject(model);
     model.scale.multiplyScalar(this.height / (box.getSize(new THREE.Vector3()).y || 1));
     box = new THREE.Box3().setFromObject(model);

@@ -1,0 +1,336 @@
+/* ── 遊戲介面：清爽的白色圓角卡片、綠色點綴、圓潤字體（高爾夫遊戲常見的輕量 HUD） ── */
+:root {
+  --ink: #26343c; --ink2: #6b7b85; --card: rgba(251, 248, 239, .95); --line: rgba(38, 52, 60, .12);
+  --green: #1f7a4d; --green2: #145a37; --lime: #a9d18e; --yellow: #d8b55f; --orange: #c9a35a; --red: #c8463c; --blue: #3f6f8f; --gold: #c9a35a; --cream: #fbf8ef;
+  --round: "Avenir Next", "Helvetica Neue", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --serif: "Didot", "Bodoni 72", "Playfair Display", "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+}
+.u-card { background: var(--card); border-radius: 14px; box-shadow: 0 3px 10px rgba(20, 40, 30, .18); color: var(--ink); }
+.u-tab { display: inline-block; padding: .18em .8em; border-radius: 99px; background: var(--green); color: #fff; font-weight: 700; letter-spacing: .04em; }
+.u-lab { font-size: .68em; font-weight: 700; letter-spacing: .06em; color: var(--ink2); }
+.u-btn { border: 0; padding: .7em 2.2em; min-width: 10em; border-radius: 99px; background: linear-gradient(#2a8f5c, var(--green)); color: #fff; font: 600 17px/1.15 var(--round); letter-spacing: .1em; cursor: pointer; box-shadow: 0 4px 0 var(--green2), 0 8px 14px rgba(20, 60, 30, .25); transition: transform .08s, box-shadow .08s; }
+.u-btn small { display: block; font-size: .55em; letter-spacing: .2em; opacity: .9; }
+.u-btn.ghost { background: #fff; color: var(--ink); box-shadow: 0 4px 0 #c9d3d8, 0 8px 14px rgba(20, 60, 30, .2); }
+.u-btn:active { transform: translateY(4px); box-shadow: 0 0 0 var(--green2), 0 2px 6px rgba(20, 60, 30, .25); }
+/* 判定字：襯線字、兩側細金線，緩緩淡入 */
+.u-word { display: flex; align-items: center; justify-content: center; gap: .04em; font: italic 400 1em/1.1 var(--serif); letter-spacing: .08em; }
+.u-word::before, .u-word::after { content: ""; width: 1.1em; height: 1px; margin: 0 .35em; background: linear-gradient(90deg, transparent, var(--gold)); animation: u-line .8s .2s ease-out both; }
+.u-word::after { transform: scaleX(-1); }
+.u-word i { display: inline-block; font-style: inherit; color: var(--fill, #fff); text-shadow: 0 1px 0 rgba(10, 40, 25, .55), 0 0 .35em rgba(10, 40, 25, .55); animation: u-fade .7s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i) * 35ms); }
+.u-word i.sp { width: .3em; }
+@keyframes u-fade { from { opacity: 0; transform: translateY(.18em); filter: blur(4px); } }
+@keyframes u-line { from { opacity: 0; width: 0; } }
+.t-great { --fill: #f3dc9a; } .t-good { --fill: #ffffff; } .t-cool { --fill: #d5e3ea; } .t-plain { --fill: #ffffff; }
+
+#game { position: fixed; inset: 0; z-index: 20; background: #9fd3ff; font-family: var(--round); color: var(--ink); user-select: none; -webkit-user-select: none; overflow: hidden; }
+#g-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#g-hud { position: absolute; inset: 0; pointer-events: none; font-size: clamp(11px, 1.85vh, 16px); }
+#g-hud button, .g-meter { pointer-events: auto; }
+#g-hud > * { transition: opacity .3s, transform .3s; }
+
+/* 左上：玩家條 */
+.g-player { position: absolute; left: 1em; top: max(1em, env(safe-area-inset-top)); display: flex; align-items: center; height: 3.3em; padding-right: .3em; overflow: hidden; }
+.g-avatar { width: 3.3em; height: 3.3em; background: #dfe7ea center 8% / 230% no-repeat; }
+.g-total { align-self: stretch; display: grid; place-items: center; min-width: 2.7em; padding: 0 .5em; background: var(--green2); color: var(--cream); font-weight: 700; font-size: 1.25em; }
+.g-pname { padding: 0 .8em; line-height: 1.25; }
+.g-pname b { display: block; font-size: 1.1em; }
+.g-pname span { font-size: .72em; color: var(--ink2); letter-spacing: .05em; }
+.g-strokeTag { margin-right: .3em; padding: .35em .8em; border-radius: 10px; background: #e8f6ea; color: var(--green2); font-weight: 700; white-space: nowrap; }
+.g-strokeTag b { font-size: 1.25em; margin: 0 .1em; }
+.g-rival { position: absolute; left: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 3.8em); padding: .25em .8em; font-size: .8em; background: rgba(38, 52, 60, .72); color: #fff; border-radius: 99px; }
+.g-rival b { margin-left: .5em; color: var(--yellow); }
+/* 右上：球洞卡 */
+.g-holeCard { position: absolute; right: 10.5em; top: max(1em, env(safe-area-inset-top)); display: grid; grid-template-columns: auto auto; overflow: hidden; }
+.g-holeCard > div { padding: .45em .9em; }
+.g-holeCard > div + div { border-left: 1px solid var(--line); text-align: center; min-width: 5.2em; }
+.g-holeTop { display: flex; align-items: baseline; gap: .4em; }
+.g-holeTop small { font-size: .78em; font-weight: 700; letter-spacing: .1em; }
+.g-holeTop b { font-size: 1.9em; line-height: 1; }
+.g-holeBot { display: flex; align-items: center; gap: .6em; margin-top: .15em; }
+.g-holeBot span:last-child { font-size: 1.1em; font-weight: 700; }
+#g-course { display: block; margin-top: .15em; font-size: .62em; letter-spacing: .08em; color: var(--ink2); }
+#g-windArrow { display: block; width: 2.3em; height: 2.3em; margin: 0 auto; transition: transform .25s; }
+#g-windSpeed { font-size: 1.05em; font-weight: 700; }
+#g-quit { position: absolute; right: 1em; top: max(1em, env(safe-area-inset-top)); width: 2.6em; height: 2.6em; border: 0; border-radius: 50%; background: var(--card); color: var(--ink); font: 700 1.1em/1 var(--round); cursor: pointer; box-shadow: 0 3px 10px rgba(20, 40, 30, .18); }
+/* 右側：小地圖 */
+#g-map { position: absolute; right: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 6.2em); width: 9em; height: 15em; border-radius: 14px; background: rgba(255, 255, 255, .28); box-shadow: 0 3px 10px rgba(20, 40, 30, .15); backdrop-filter: blur(2px); }
+/* 場景中的標記 */
+.g-mark { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); text-align: center; white-space: nowrap; will-change: transform; }
+.g-pinMark i { display: grid; place-items: center; width: 2.2em; height: 2.2em; margin: 0 auto; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); font-style: normal; }
+.g-pinMark i::after { content: ""; position: absolute; left: 50%; top: 2.05em; margin-left: -.35em; border: .35em solid transparent; border-top-color: #fff; }
+.g-pinMark svg { width: 1.3em; height: 1.3em; }
+.g-pinMark span { position: absolute; left: 100%; top: .25em; margin-left: .3em; padding: .1em .5em; border-radius: 6px; background: rgba(255, 255, 255, .9); font-size: .78em; font-weight: 700; }
+.g-pinMark span em { font-style: normal; color: var(--red); margin-right: .2em; }
+.g-tgtMark b { display: block; font-size: 1.25em; color: #fff; text-shadow: 0 1px 0 #1c3a26, 0 0 6px rgba(0, 0, 0, .5); }
+.g-tgtMark::after { content: ""; display: block; margin: .1em auto 0; width: 0; border: .55em solid transparent; border-top: .8em solid var(--yellow); border-bottom: 0; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .35)); animation: g-bob 1s ease-in-out infinite; }
+@keyframes g-bob { 50% { transform: translateY(.3em); } }
+
+/* 左下：球桿卡與剩餘距離 */
+.g-left { position: absolute; left: 1em; bottom: max(1em, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: .5em; }
+.g-club { position: relative; width: 7.4em; padding: 1.5em .4em .35em; text-align: center; }
+.g-club #g-clubId { position: absolute; left: 0; top: 0; padding: .15em .7em .2em; border-radius: 14px 0 12px 0; background: var(--green); color: #fff; font-size: 1.2em; font-weight: 700; }
+.g-clubIcon { display: block; width: 4.2em; height: 4.2em; margin: 0 auto; object-fit: contain; }
+#g-clubName { display: block; font-size: .66em; color: var(--ink2); letter-spacing: .04em; white-space: nowrap; }
+#g-clubDist { display: block; font-size: 1.05em; font-weight: 700; }
+.g-clubNav { position: absolute; right: .3em; top: .3em; display: flex; gap: .2em; }
+.g-clubNav button { width: 1.7em; height: 1.7em; border: 0; border-radius: 50%; background: #e9eef0; color: var(--ink); font: 700 .9em/1 var(--round); cursor: pointer; }
+.g-clubNav button:disabled { opacity: .3; }
+.g-remain { padding: .35em .9em .4em; min-width: 6.4em; }
+.g-remain b { display: block; font-size: 1.5em; line-height: 1.1; }
+/* 正下方：細長量表 */
+.g-gauge { position: absolute; left: 50%; bottom: max(1.6em, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(38em, 44vw); }
+.g-meter { position: relative; height: 1.5em; border-radius: 99px; background: rgba(255, 255, 255, .5); box-shadow: 0 2px 8px rgba(20, 40, 30, .2), inset 0 0 0 2px rgba(255, 255, 255, .85); cursor: pointer; }
+.g-track { position: absolute; inset: 3px; border-radius: 99px; overflow: hidden; background: rgba(38, 52, 60, .28); }
+.g-fill { position: absolute; right: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #cfe8b8, #e9d79a 70%, #d8a85a); }
+.g-sweet { position: absolute; top: 0; bottom: 0; background: #fff; box-shadow: 0 0 8px #fff; transition: width .2s, right .2s; }
+.g-zero { position: absolute; right: 9.09%; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, .7); }
+.g-powerMark { position: absolute; top: -.35em; bottom: -.35em; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--orange); box-shadow: 0 0 0 2px #fff; }
+.g-cursor { position: absolute; top: -.5em; bottom: -.5em; width: 6px; margin-left: -3px; border-radius: 3px; background: #fff; box-shadow: 0 0 0 2px var(--ink), 0 0 10px #fff; }
+.g-ticks { position: relative; height: 1.9em; margin-top: .25em; }
+.g-ticks span { position: absolute; top: 0; transform: translateX(-50%); padding: .08em .55em; border-radius: 6px; background: rgba(255, 255, 255, .9); font-size: .78em; font-weight: 700; white-space: nowrap; }
+.g-ticks span::before { content: ""; position: absolute; left: 50%; top: -.35em; margin-left: -.3em; border: .3em solid transparent; border-bottom-color: rgba(255, 255, 255, .9); border-top: 0; }
+#g-tick2 { transform: none; } #g-tick2::before { left: .6em; }
+.g-ticks .g-tSweet { background: var(--green); color: #fff; } .g-ticks .g-tSweet::before { border-bottom-color: var(--green); }
+/* 步驟引導與提示 */
+.g-coach { display: flex; align-items: center; justify-content: center; gap: .5em; margin-bottom: .4em; font-size: .78em; font-weight: 600; }
+.g-coach span { display: flex; align-items: center; gap: .4em; padding: .22em .8em .22em .28em; border-radius: 99px; background: rgba(38, 52, 60, .55); color: rgba(255, 255, 255, .75); transition: background .2s, transform .2s, color .2s; }
+.g-coach span b { display: grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 50%; background: rgba(255, 255, 255, .25); }
+.g-coach i { font-style: normal; color: #fff; opacity: .7; text-shadow: 0 1px 2px #000; }
+#game[data-step="idle"] .g-coach [data-s="idle"], #game[data-step="up"] .g-coach [data-s="up"], #game[data-step="down"] .g-coach [data-s="down"] { background: var(--cream); color: var(--green2); transform: scale(1.1); box-shadow: 0 0 0 2px var(--gold), 0 3px 8px rgba(0, 0, 0, .25); }
+#game[data-step="idle"] .g-coach [data-s="idle"] b, #game[data-step="up"] .g-coach [data-s="up"] b, #game[data-step="down"] .g-coach [data-s="down"] b { background: var(--green); color: #fff; }
+.g-prompt { margin-bottom: .55em; text-align: center; font-size: .92em; font-weight: 600; color: #fff; text-shadow: 0 1px 0 rgba(10, 40, 25, .8), 0 0 6px rgba(10, 40, 25, .7); min-height: 1.3em; }
+.g-need { position: absolute; top: -1.75em; width: 0; transition: left .25s, opacity .2s; }
+.g-need::before { content: ""; position: absolute; left: -1px; top: .2em; width: 2px; height: 3.2em; background: var(--green2); box-shadow: 0 0 0 1px #fff; }
+.g-need em { position: absolute; left: 1px; top: 0; padding: .08em .5em; border-radius: 0 6px 6px 0; background: var(--green); color: #fff; font: 600 .68em/1.4 var(--round); white-space: nowrap; box-shadow: 0 0 0 1px #fff; }
+/* 旋球與強力擊球 */
+.g-opts { display: flex; flex-direction: column; gap: .4em; align-items: stretch; }
+.g-spin { padding: .3em .5em .35em; text-align: center; width: 7.2em; }
+.g-spin b { display: block; font-size: .62em; color: var(--ink2); white-space: nowrap; }
+.g-spinBall { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 3.4em; height: 3.4em; margin: .15em auto; padding: .2em 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #e3e7ea 60%, #b7c0c6); box-shadow: 0 2px 4px rgba(0, 0, 0, .2); }
+.g-spinBall button { flex: 1; width: 1.6em; border: 0; border-radius: 50%; background: none; color: rgba(38, 52, 60, .3); font-size: .7em; line-height: 1; cursor: pointer; padding: 0; }
+.g-spinBall button.on { color: #fff; background: var(--red); box-shadow: 0 0 0 2px #fff; }
+.g-power { width: 7.2em; padding: .35em .5em .4em; border: 0; text-align: center; font: inherit; cursor: pointer; }
+.g-power b { display: block; font-size: .78em; }
+.g-power.on { background: linear-gradient(#f3dc9a, var(--gold)); box-shadow: 0 0 0 2px #fff, 0 3px 10px rgba(20, 40, 30, .25); }
+.g-power:disabled { opacity: .45; cursor: default; }
+/* 飛行距離 */
+.g-fly { position: absolute; left: 50%; bottom: max(2em, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: baseline; gap: .5em; padding: .35em 1.2em; opacity: 0; }
+.g-fly b { font-size: 1.9em; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+#game[data-phase="flight"]:not([data-putt="1"]) .g-fly { opacity: 1; }
+#g-mute { position: absolute; right: 7.2em; top: max(1em, env(safe-area-inset-top)); width: 2.6em; height: 2.6em; border: 0; border-radius: 50%; background: var(--card); color: var(--green2); font: 700 1.1em/1 var(--round); cursor: pointer; box-shadow: 0 3px 10px rgba(20, 40, 30, .18); }
+#g-mute.off { color: #b6c0c5; text-decoration: line-through; }
+#game[data-phase="result"] #g-mute { opacity: 0; }
+#g-help { position: absolute; right: 4.1em; top: max(1em, env(safe-area-inset-top)); width: 2.6em; height: 2.6em; border: 0; border-radius: 50%; background: var(--card); color: var(--green2); font: 700 1.1em/1 var(--round); cursor: pointer; box-shadow: 0 3px 10px rgba(20, 40, 30, .18); }
+/* 教學 */
+#g-tutor { z-index: 5; background: rgba(20, 50, 40, .55); }
+.g-tutorCard { width: min(720px, 100%); }
+.g-tut { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 20px 20px 6px; }
+.g-tut > div { position: relative; padding: 26px 14px 14px; border-radius: 16px; background: #f1f5f2; text-align: center; }
+.g-tut > div > i { position: absolute; left: 50%; top: -15px; transform: translateX(-50%); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: #fff; font: 700 16px/1 var(--round); box-shadow: 0 0 0 3px var(--cream); }
+.g-tut b { display: block; margin-top: 14px; font-size: 18px; }
+.g-tut span { font-size: 11px; letter-spacing: .12em; color: var(--green2); }
+.g-tutNote { margin: 10px 0 14px; font-size: 13px; color: var(--ink2); }
+/* 示範量表：擊球點（白色）在右，游標示範每一步 */
+.g-demo { position: relative; width: 100%; height: 16px; border-radius: 99px; background: #cfd9d4; box-shadow: inset 0 0 0 2px #fff; }
+.g-demo::before { content: ""; position: absolute; right: 12%; top: 2px; bottom: 2px; width: 12%; border-radius: 3px; background: #fff; box-shadow: 0 0 0 2px var(--green); }
+.g-demo u { position: absolute; top: -5px; bottom: -5px; width: 7px; margin-left: -3px; border-radius: 4px; background: var(--ink); box-shadow: 0 0 0 2px #fff; }
+.g-demo.d1 u { left: 82%; animation: d-tap 1.6s ease-in-out infinite; }
+.g-demo.d2 u { animation: d-left 2s linear infinite; }
+.g-demo.d3 u { animation: d-right 2s linear infinite; }
+.g-demo.d2::after, .g-demo.d3::after { content: ""; position: absolute; left: 24%; top: -3px; bottom: -3px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--gold); }
+@keyframes d-tap { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px #fff; } 50% { transform: scale(1.35); box-shadow: 0 0 0 2px #fff, 0 0 0 9px rgba(31, 122, 77, .3); } }
+@keyframes d-left { 0% { left: 82%; } 70%, 100% { left: 24%; } }
+@keyframes d-right { 0% { left: 24%; } 70%, 100% { left: 82%; } }
+#game:not([data-phase="aim"]):not([data-phase="swing"]) #g-help { opacity: 0; pointer-events: none; }
+
+/* 右下：球位與擊球鈕 */
+.g-right { position: absolute; right: 1em; bottom: max(1em, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: .7em; }
+.g-lie { width: 5.6em; padding: .35em .3em .3em; text-align: center; }
+.g-lieView { position: relative; height: 3em; margin: 0 .2em .2em; border-radius: 9px; background: linear-gradient(transparent 55%, var(--turf, #58b948) 55%); overflow: hidden; }
+.g-lieView::after { content: ""; position: absolute; left: 50%; bottom: var(--sink, 38%); width: 1.7em; height: 1.7em; margin-left: -.85em; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #e3e7ea 60%, #b7c0c6); box-shadow: 0 2px 3px rgba(0, 0, 0, .25); }
+.g-lieView::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--grass, 0%); background: var(--turf, #58b948); z-index: 1; opacity: .9; }
+#g-liePct { display: block; font-size: 1.15em; font-weight: 700; line-height: 1.1; }
+#g-lie { display: block; font-size: .62em; color: var(--ink2); white-space: nowrap; }
+#g-swing { width: 6.4em; height: 6.4em; border: .35em solid #fff; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 35% 28%, #3aa06b, var(--green) 65%, var(--green2)); color: #fff; font: 700 1em/1.15 var(--round); box-shadow: 0 4px 0 #c9d3d8, 0 8px 16px rgba(20, 60, 30, .3); transition: transform .08s, box-shadow .08s; }
+#g-swing b { display: block; font-size: 1.35em; }
+#g-swing small { font-size: .62em; letter-spacing: .12em; opacity: .95; }
+#g-swing:active { transform: translateY(4px); box-shadow: 0 0 0 #c9d3d8, 0 3px 8px rgba(20, 60, 30, .3); }
+#game[data-phase="aim"] #g-swing { animation: g-pulse 1.2s ease-in-out infinite; }
+@keyframes g-pulse { 50% { box-shadow: 0 4px 0 #c9d3d8, 0 8px 16px rgba(20, 60, 30, .3), 0 0 0 .6em rgba(255, 255, 255, .35); } }
+
+/* ── 整合式底部操作列：一塊底板、同一高度，用分隔線分格 ── */
+.g-dock { position: absolute; left: 50%; bottom: max(1em, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(74em, calc(100% - 2em)); height: 6.2em; display: grid; grid-template-columns: auto auto minmax(12em, 1fr) auto auto auto auto; align-items: stretch; border-radius: 3.1em 3.4em 3.4em 3.1em; padding-left: .6em; }
+.g-dock > * { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15em; padding: 0 1em; min-width: 0; }
+.g-dock > * + * { border-left: 1px solid var(--line); }
+.g-dock .u-lab { white-space: nowrap; }
+.g-dock .g-cell > b { font-size: 1.35em; line-height: 1.1; white-space: nowrap; }
+/* 球桿 */
+.g-dock .g-club { position: static; width: auto; flex-direction: row; gap: .5em; padding: 0 .8em 0 .4em; text-align: left; }
+.g-dock .g-clubIcon { width: 4em; height: 4em; margin: 0; }
+.g-dock .g-clubText { min-width: 5.6em; line-height: 1.15; }
+.g-dock #g-clubId { position: static; display: inline-block; padding: .05em .6em .1em; border-radius: 99px; background: var(--green); color: #fff; font-size: 1em; font-weight: 700; }
+.g-dock #g-clubName { display: block; margin-top: .15em; font-size: .62em; color: var(--ink2); white-space: nowrap; }
+.g-dock #g-clubDist { display: block; font-style: normal; font-size: 1.25em; font-weight: 700; white-space: nowrap; }
+.g-dock .g-clubNav { position: static; flex-direction: column; gap: .25em; }
+.g-dock .g-clubNav button { width: 1.9em; height: 1.9em; font-size: .7em; }
+.g-dock .g-remain { padding: 0 1.1em; min-width: 0; }
+/* 量表 */
+.g-dock .g-gauge { position: static; transform: none; width: auto; padding: 0 1.2em; align-items: stretch; gap: .28em; }
+.g-dock .g-coach { justify-content: flex-start; gap: .3em; margin: 0; font-size: .66em; }
+.g-dock .g-coach span { background: #e6ece8; color: var(--ink2); padding: .15em .7em .15em .2em; }
+.g-dock .g-coach span b { background: #fff; }
+.g-dock .g-coach i { color: var(--ink2); text-shadow: none; }
+#game[data-step="idle"] .g-dock .g-coach [data-s="idle"], #game[data-step="up"] .g-dock .g-coach [data-s="up"], #game[data-step="down"] .g-dock .g-coach [data-s="down"] { background: var(--green); color: #fff; transform: none; box-shadow: none; }
+#game[data-step="idle"] .g-dock .g-coach [data-s="idle"] b, #game[data-step="up"] .g-dock .g-coach [data-s="up"] b, #game[data-step="down"] .g-dock .g-coach [data-s="down"] b { background: #fff; color: var(--green2); }
+.g-dock .g-prompt { margin: 0 0 0 auto; min-height: 0; font-style: normal; font-size: 1.15em; font-weight: 700; color: var(--green2); text-shadow: none; white-space: nowrap; }
+.g-dock .g-meter { height: 1.25em; background: #dfe6e2; box-shadow: none; }
+.g-dock .g-track { inset: 0; background: #b9c6bf; }
+.g-dock .g-sweet { box-shadow: 0 0 0 2px var(--green); }
+.g-dock .g-need { top: -.5em; }
+.g-dock .g-need::before { top: 0; height: 2.2em; width: 3px; left: -1.5px; background: var(--green); box-shadow: none; border-radius: 2px; }
+.g-dock .g-need::after { content: ""; position: absolute; left: 1.5px; top: 0; border: .32em solid transparent; border-left: .55em solid var(--green); border-right: 0; }
+.g-dock .g-ticks { height: 1.1em; margin: 0; }
+.g-dock .g-ticks span { padding: 0; background: none; font-size: .7em; color: var(--ink2); }
+.g-dock .g-ticks span::before { display: none; }
+.g-dock .g-ticks .g-tSweet { background: none; color: var(--green2); }
+.g-dock #g-tick2 { transform: none; }
+/* 旋球：三顆並排 */
+.g-dock .g-spin { width: auto; padding: 0 1em; }
+.g-spinBtns { display: flex; gap: .2em; padding: .15em; border-radius: 99px; background: #e6ece8; }
+.g-spinBtns button { width: 1.9em; height: 1.9em; border: 0; border-radius: 50%; background: none; color: var(--ink2); font-size: .8em; line-height: 1; cursor: pointer; padding: 0; }
+.g-spinBtns button.on { background: var(--green); color: #fff; }
+.g-dock .g-spin > b { font-size: .7em; color: var(--ink2); font-weight: 600; }
+/* 強力擊球 */
+.g-dock .g-power { width: auto; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: none; box-shadow: none; font: inherit; color: inherit; cursor: pointer; }
+.g-powerIcon { display: grid; place-items: center; width: 1.9em; height: 1.9em; border-radius: 50%; background: #e6ece8; font-style: normal; font-size: 1em; line-height: 1; filter: grayscale(1); }
+.g-dock .g-power.on { background: none; box-shadow: none; }
+.g-dock .g-power.on .g-powerIcon { background: var(--gold); filter: none; box-shadow: 0 0 0 3px rgba(201, 163, 90, .35); }
+.g-dock .g-power > b { font-size: .8em; }
+/* 球位 */
+.g-dock .g-lie { width: auto; padding: 0 1em; }
+.g-dock .g-lieView { width: 3.6em; height: 2em; margin: 0; }
+.g-dock .g-lieView::after { width: 1.3em; height: 1.3em; margin-left: -.65em; }
+.g-dock #g-lie { display: block; font-size: .62em; }
+.g-dock #g-liePct { font-size: 1em; }
+/* 擊球鈕：收在操作列最右端 */
+.g-dock #g-swing { width: 6.8em; height: 6.8em; margin: -.3em -.3em -.3em .6em; padding: 0; border: .32em solid var(--cream); align-self: center; }
+.g-dock > #g-swing { border-left: .32em solid var(--cream); }
+#game:not([data-phase="aim"]):not([data-phase="swing"]) .g-dock { opacity: 0; transform: translate(-50%, 30px); pointer-events: none; }
+#game:not([data-phase="aim"]):not([data-phase="swing"]) .g-dock * { pointer-events: none; }
+.g-hint { display: none; }
+
+/* 階段顯示規則 */
+#game:not([data-phase="aim"]):not([data-phase="swing"]) :is(.g-gauge, .g-left, .g-right, .g-tgtMark) { opacity: 0; pointer-events: none; }
+#game:not([data-phase="aim"]):not([data-phase="swing"]) :is(.g-gauge, .g-left, .g-right) * { pointer-events: none; }
+#game:not([data-phase="aim"]) .g-hint, #game:is([data-phase="intro"], [data-phase="holed"], [data-phase="result"]) :is(#g-map, .g-pinMark) { opacity: 0; }
+#game[data-phase="result"] :is(.g-player, .g-rival, .g-holeCard, #g-quit) { opacity: 0; }
+
+.g-hint { position: absolute; left: 50%; bottom: calc(max(1.6em, env(safe-area-inset-bottom)) + 5.2em); transform: translateX(-50%); padding: .3em 1em; border-radius: 99px; background: rgba(38, 52, 60, .6); color: #fff; font-size: .78em; white-space: nowrap; }
+.g-hint:empty { display: none; }
+
+/* 判定字 */
+.g-toast { position: absolute; left: 50%; top: 11%; transform: translateX(-50%); text-align: center; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.g-toast.show { opacity: 1; }
+.g-toast .u-word { font-size: 4.2em; }
+.g-toast.big .u-word { font-size: 6.4em; }
+.g-toast .g-sub { display: inline-block; margin-top: .5em; padding: .2em 1.3em; border-radius: 99px; background: rgba(20, 60, 40, .55); color: #fff; font-size: .95em; letter-spacing: .2em; animation: u-fade .6s .3s ease-out both; }
+
+/* 覆蓋層 */
+.g-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(20, 50, 40, .28); }
+.g-overlay[hidden] { display: none; }
+#g-loading { background: linear-gradient(#8fd0ff, #d9f3c0); align-content: center; gap: 14px; }
+#g-loading p { font-weight: 700; letter-spacing: .2em; color: var(--green2); }
+.g-spinner { width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #e3e7ea 60%, #b7c0c6); box-shadow: 0 3px 6px rgba(0, 0, 0, .2); animation: g-bounce .5s ease-in infinite alternate; }
+@keyframes g-bounce { from { transform: translateY(-34px); } to { transform: translateY(0) scale(1.12, .86); } }
+
+/* 計分卡 */
+.g-board { width: min(800px, 100%); max-height: 100%; overflow: auto; padding: 0 0 18px; text-align: center; border-radius: 20px; animation: g-rise .35s cubic-bezier(.2, 1.3, .4, 1) both; }
+@keyframes g-rise { from { transform: translateY(30px) scale(.94); opacity: 0; } }
+.g-boardHead { display: flex; align-items: baseline; justify-content: space-between; padding: .8em 1.4em .7em; border-radius: 20px 20px 0 0; background: var(--green2); color: #fff; border-bottom: 2px solid var(--gold); font-family: var(--serif); }
+.g-boardHead b { font-size: 22px; letter-spacing: .08em; }
+.g-boardHead span { font-size: 12px; letter-spacing: .2em; opacity: .95; }
+.g-table { width: calc(100% - 28px); margin: 12px 14px 4px; border-collapse: separate; border-spacing: 0 5px; font: 700 14px/1 var(--round); }
+.g-table th, .g-table td { padding: 9px 4px; text-align: center; background: #f1f5f6; }
+.g-table th:first-child { text-align: left; padding-left: 14px; white-space: nowrap; font-size: 12px; border-radius: 10px 0 0 10px; }
+.g-table td:last-child, .g-table th:last-child { border-radius: 0 10px 10px 0; font-size: 16px; }
+.g-table tr:first-child th { background: var(--ink); color: #fff; }
+.g-table td { font-size: 16px; }
+.g-table tr.me th, .g-table tr.me td { background: #e3f6e6; }
+.g-table td.under span { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--red); color: var(--red); }
+.g-table td.over span { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; box-shadow: inset 0 0 0 2px var(--blue); color: var(--blue); }
+.g-table em { font-style: normal; font-size: 12px; color: var(--green2); margin-left: 4px; }
+.g-cardNote { margin: 4px 0 14px; font-size: 11px; letter-spacing: .15em; color: var(--ink2); }
+.g-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+/* 結算 */
+#g-result { background: linear-gradient(90deg, transparent 0 34%, rgba(255, 255, 255, .35) 62%); grid-template-columns: 1fr minmax(0, 640px); align-content: center; gap: 12px; padding-right: 3vw; }
+#g-result > * { grid-column: 2; }
+.g-resTitle .u-word { font-size: clamp(56px, 12vh, 110px); }
+.g-resTitle { text-align: center; }
+.g-resTitle .g-sub { display: block; width: max-content; margin: 12px auto 0; padding: .3em 1.4em; border-radius: 99px; background: var(--card); font-weight: 700; letter-spacing: .3em; box-shadow: 0 3px 10px rgba(20, 40, 30, .2); }
+.g-vs { display: flex; align-items: stretch; justify-content: center; gap: 12px; margin: 14px 14px 0; }
+.g-vs > div { flex: 1; padding: 10px 6px; border-radius: 14px; background: #f1f5f6; text-align: center; }
+.g-vs > div.win { background: #fff3c4; box-shadow: inset 0 0 0 3px var(--yellow); }
+.g-vs small { display: block; font-size: 12px; color: var(--ink2); }
+.g-vs b { font-size: 44px; line-height: 1.05; }
+.g-vs em { font-style: normal; font-size: 15px; margin-left: 6px; color: var(--green2); }
+.g-vs i { align-self: center; font-style: normal; font-weight: 700; color: var(--ink2); }
+
+/* 球場選擇 */
+#course-select { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; padding: 20px 16px; background: linear-gradient(rgba(255, 255, 255, .25), rgba(255, 255, 255, .5)), url(/ui/bg_select.webp) center / cover; font-family: var(--round); color: var(--ink); overflow: auto; }
+.cs-box { width: min(1100px, 100%); text-align: center; }
+.cs-head { display: inline-flex; align-items: baseline; gap: .8em; margin-bottom: 18px; padding: .5em 2.2em; border-radius: 99px; background: var(--green2); color: #fff; border-bottom: 2px solid var(--gold); font-family: var(--serif); box-shadow: 0 4px 12px rgba(20, 60, 30, .25); }
+.cs-head b { font-size: 26px; letter-spacing: .1em; }
+.cs-head span { font-size: 12px; letter-spacing: .25em; }
+.cs-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.cs-card { position: relative; padding: 0 0 12px; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; overflow: hidden; border-radius: 18px; transition: transform .16s, box-shadow .16s; animation: g-rise .4s cubic-bezier(.2, 1.3, .4, 1) both; }
+.cs-card:nth-child(2) { animation-delay: .07s; } .cs-card:nth-child(3) { animation-delay: .14s; }
+.cs-card:hover { transform: translateY(-8px); box-shadow: 0 0 0 4px var(--green), 0 12px 22px rgba(20, 60, 30, .3); }
+.cs-art { aspect-ratio: 3 / 2; background: var(--sky) center / cover; }
+.cs-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cs-holes { position: absolute; left: 0; top: 0; padding: .25em .9em .3em; border-radius: 0 0 16px 0; background: var(--green); color: #fff; }
+.cs-holes b { font-size: 26px; }
+.cs-holes small { margin-left: .3em; font-size: 11px; letter-spacing: .08em; }
+.cs-body { padding: 10px 14px 0; }
+.cs-body b { font-size: 24px; }
+.cs-body span { margin-left: 8px; font-size: 12px; letter-spacing: .12em; color: var(--green2); }
+.cs-body p { margin: 4px 0 8px; font: 500 13px/1.5 "PingFang SC", "Noto Sans SC", sans-serif; color: var(--ink2); min-height: 3em; }
+.cs-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; }
+.cs-meta em { font-style: normal; font-size: 12px; color: var(--ink2); margin-left: 8px; }
+.cs-stars { color: var(--yellow); font-size: 18px; letter-spacing: 2px; -webkit-text-stroke: 1px #d99a00; }
+.cs-stars s { text-decoration: none; color: #dfe6ea; -webkit-text-stroke: 1px #c3cdd3; }
+.cs-back { margin-top: 20px; }
+
+/* 手機／直向 */
+@media (max-width: 767px), (orientation: portrait) {
+  #g-hud { font-size: clamp(10px, 1.4vh, 14px); }
+  .g-player { left: .6em; } .g-pname span { display: none; }
+  .g-rival { left: .6em; }
+  #g-help { right: 3.7em; } #g-mute { right: 6.8em; }
+  .g-right .g-opts { flex-direction: row; } .g-spin, .g-power { width: 6.4em; }
+  .g-coach { font-size: .68em; gap: .25em; } .g-prompt { font-size: .8em; }
+  .g-fly { bottom: max(1.4em, env(safe-area-inset-bottom)); }
+  .g-tut { grid-template-columns: 1fr; gap: 22px; padding: 22px 16px 4px; } .g-tut > div { padding: 22px 14px 10px; } .g-tut b { margin-top: 10px; font-size: 16px; }
+  .g-holeCard { right: .6em; top: calc(max(1em, env(safe-area-inset-top)) + 3.9em); } #g-course { display: none; }
+  #g-quit { right: .6em; }
+  #g-map { right: .6em; top: calc(max(1em, env(safe-area-inset-top)) + 9.6em); width: 7em; height: 11.5em; }
+  .g-left { left: .6em; bottom: calc(max(1em, env(safe-area-inset-bottom)) + 5.6em); flex-direction: column; align-items: flex-start; }
+  .g-right { right: .6em; bottom: calc(max(1em, env(safe-area-inset-bottom)) + 5.6em); flex-direction: column; align-items: flex-end; }
+  .g-gauge { left: .9em; right: .9em; width: auto; transform: none; bottom: max(1.2em, env(safe-area-inset-bottom)); }
+  .g-hint { bottom: auto; top: calc(max(1em, env(safe-area-inset-top)) + 22em); white-space: normal; width: 80%; text-align: center; border-radius: 12px; }
+  .g-toast .u-word { font-size: 3em; } .g-toast.big .u-word { font-size: 4.2em; }
+  .g-table { font-size: 11px; width: calc(100% - 12px); margin: 10px 6px 4px; } .g-table td, .g-table td:last-child { font-size: 12px; } .g-table th:first-child { font-size: 9px; white-space: normal; padding-left: 6px; } .g-table th, .g-table td { padding: 7px 2px; }
+  #g-result { grid-template-columns: 1fr; padding: 10px; background: linear-gradient(180deg, transparent 0 22%, rgba(255, 255, 255, .45) 50%); align-content: end; }
+  #g-result > * { grid-column: 1; }
+  .g-resTitle .u-word { font-size: 52px; } .g-vs b { font-size: 30px; }
+  .g-dock { left: .6em; right: .6em; width: auto; transform: none; height: auto; border-radius: 22px; padding: .5em .4em .6em; grid-template-columns: auto auto 1fr auto auto; grid-template-areas: "club remain spin power lie" "gauge gauge gauge gauge swing"; row-gap: .5em; }
+  #game:not([data-phase="aim"]):not([data-phase="swing"]) .g-dock { transform: translateY(30px); }
+  .g-dock > * { padding: 0 .5em; }
+  .g-dock .g-club { grid-area: club; padding: 0 .4em 0 0; } .g-dock .g-clubIcon { width: 3em; height: 3em; } .g-dock .g-clubText { min-width: 0; } .g-dock #g-clubName { display: none; }
+  .g-dock .g-remain { grid-area: remain; } .g-dock .g-spin { grid-area: spin; } .g-dock .g-power { grid-area: power; } .g-dock .g-lie { grid-area: lie; }
+  .g-dock .g-gauge { grid-area: gauge; border-left: 0; padding: .5em .6em 0; border-top: 1px solid var(--line); }
+  .g-dock #g-swing { grid-area: swing; width: 5.6em; height: 5.6em; margin: 0 0 0 .3em; }
+  .g-dock .g-prompt { font-size: 1em; }
+  .cs-list { grid-template-columns: 1fr; } .cs-art { aspect-ratio: 3 / 1.2; } .cs-body p { min-height: 0; }
+  .u-btn { font-size: 15px; min-width: 8.5em; }
+}

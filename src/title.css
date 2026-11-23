@@ -1,0 +1,48 @@
+/* ── 封面畫面：滿版主視覺插畫緩慢推近，標題字砸進來，開始鈕閃動 ── */
+#title-screen {
+  --art-x: 30%; --art-y: 50%; --logo-x: 3vw; --logo-y: 16vh; --logo-w: 46vw; --start-y: 5.5vh;
+  position: fixed; inset: 0; z-index: 30; overflow: hidden; cursor: pointer;
+  background: linear-gradient(180deg, #1f7fd8 0%, #6cc5f2 45%, #58b85a 62%, #2f8f3e 100%);
+  transition: opacity .45s, transform .45s;
+}
+#title-screen.out { opacity: 0; transform: scale(1.12); pointer-events: none; }
+#title-screen > i { position: absolute; inset: 0; pointer-events: none; }
+.tt-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--art-x) var(--art-y); transform-origin: 30% 0%; animation: tt-push 26s ease-in-out infinite alternate; }
+@keyframes tt-push { from { transform: scale(1); } to { transform: scale(1.06) translate(-1%, 0); } }
+/* 太陽光暈忽明忽暗 */
+.tt-flare { background: radial-gradient(38% 46% at 92% 4%, rgba(255, 250, 220, .75), rgba(255, 240, 180, .18) 55%, transparent 72%); mix-blend-mode: screen; animation: tt-flare 3.6s ease-in-out infinite; }
+@keyframes tt-flare { 50% { opacity: .55; } }
+/* 飄在空中的草屑與光點 */
+.tt-dust {
+  background:
+    radial-gradient(circle, rgba(255, 255, 220, .95) 0 1.5px, transparent 2px) 0 0 / 190px 170px,
+    radial-gradient(circle, rgba(190, 255, 140, .8) 0 2.2px, transparent 3px) 60px 40px / 260px 230px,
+    radial-gradient(circle, rgba(255, 255, 255, .85) 0 1px, transparent 1.6px) 30px 90px / 130px 150px;
+  animation: tt-dust 18s linear infinite; opacity: .45;
+}
+@keyframes tt-dust { to { background-position: 190px -170px, 320px -190px, 160px -60px; } }
+.tt-shade { background: linear-gradient(transparent 60%, rgba(10, 40, 28, .32)); }
+
+.tt-logo { position: absolute; right: var(--logo-x); bottom: var(--logo-y); width: var(--logo-w); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2.2vh; }
+.tt-mark { width: 100%; height: auto; filter: drop-shadow(0 8px 18px rgba(10, 40, 28, .35)); animation: tt-rise 1.4s cubic-bezier(.2, .7, .2, 1) both; -webkit-user-drag: none; }
+/* 標誌圖還沒好時的文字版標題 */
+.tt-mark-text { margin: 0; text-align: center; font: 600 calc(var(--logo-w) * .19)/1.1 "Songti SC", "STSong", "Noto Serif SC", "Didot", Georgia, serif; letter-spacing: .12em; color: #145a37; -webkit-text-stroke: .05em #fbf8ef; paint-order: stroke fill; text-shadow: 0 .04em .12em rgba(10, 40, 28, .35); animation: tt-rise 1.4s cubic-bezier(.2, .7, .2, 1) both; }
+.tt-mark-text small { display: block; margin-top: .7em; font: 400 .2em/1 "Didot", "Bodoni 72", Georgia, serif; letter-spacing: .5em; color: #c9a35a; -webkit-text-stroke: 0; text-shadow: 0 1px 2px rgba(10, 40, 28, .4); }
+@keyframes tt-rise { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } }
+.tt-year { display: flex; align-items: center; gap: 1em; font: 400 clamp(.75rem, 1.9vh, 1.05rem)/1.2 "Didot", "Bodoni 72", "Songti SC", Georgia, serif; letter-spacing: .4em; white-space: nowrap; color: #fff; text-shadow: 0 1px 6px rgba(10, 40, 28, .7); animation: tt-rise 1.2s .6s cubic-bezier(.2, .7, .2, 1) both; }
+.tt-year::before, .tt-year::after { content: ""; width: 3.5em; height: 1px; background: linear-gradient(90deg, transparent, #d8b55f); }
+.tt-year::after { transform: scaleX(-1); }
+
+.tt-start { position: absolute; left: 50%; bottom: var(--start-y); z-index: 2; translate: -50% 0; white-space: nowrap; padding: .75em 3em .65em; cursor: pointer; font: 600 clamp(.95rem, 2.5vh, 1.3rem)/1 "Avenir Next", "Helvetica Neue", "PingFang SC", sans-serif; letter-spacing: .4em; color: #145a37; background: rgba(251, 248, 239, .95); border: 0; border-bottom: 2px solid #c9a35a; border-radius: 99px; box-shadow: 0 6px 18px rgba(10, 40, 28, .3); animation: tt-rise 1.2s 1s cubic-bezier(.2, .7, .2, 1) both, tt-breathe 2.6s 2.2s ease-in-out infinite; }
+.tt-start small { display: block; margin-top: .5em; font: italic 400 .55em/1 "Didot", "Bodoni 72", Georgia, serif; letter-spacing: .45em; color: #c9a35a; }
+@keyframes tt-breathe { 50% { box-shadow: 0 6px 18px rgba(10, 40, 28, .3), 0 0 0 8px rgba(251, 248, 239, .28); } }
+.tt-ver { position: absolute; left: 14px; bottom: 10px; z-index: 2; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: rgba(255, 255, 255, .7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-art, .tt-dust, .tt-flare, .tt-mark, .tt-mark-text, .tt-start, .tt-year { animation: none; }
+}
+
+@media (max-width: 767px), (orientation: portrait) {
+  .tt-year { letter-spacing: .22em; gap: .6em; font-size: .78rem; }
+  .tt-year::before, .tt-year::after { width: 1.6em; }
+}

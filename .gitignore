@@ -1,0 +1,10 @@
+node_modules
+dist
+tools/gen.log
+.DS_Store
+.env
+tools/tripo.log
+tools/gen_ui.log
+assets/models_raw/
+tools/tripo_state.json
+.wrangler

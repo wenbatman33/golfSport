@@ -3,6 +3,8 @@
 //       bunkers / water：[t 沿球道位置 0~1, off 距球道中心線的橫向距離(m), r 半徑(m)]
 //       wind：[風速 m/s, 風向角度（0 = 順著發球方向吹）]
 
+import { LINKS_HOLES } from './links_data.js';
+
 export const COURSES = [
   {
     id: 'palm', zh: '椰林湾', en: 'PALM BAY', levelZh: '新手', levelEn: 'BEGINNER', stars: 1,
@@ -58,6 +60,19 @@ export const COURSES = [
       { par: 4, len: 380, dog: 18, pinX: 0, width: 24, greenR: 11, bunkers: [[0.55, 18, 8], [0.75, -18, 7], [0.95, 16, 5], [0.95, -16, 5]], water: [], wind: [8, 20] },
     ],
   },
+  {
+    // 以蘇格蘭聖安德魯斯老球場的真實球洞配置為藍本（資料來源 OpenStreetMap，見 tools/osm/build_links.py）
+    id: 'links', zh: '古镇林克斯', en: 'OLD LINKS', levelZh: '经典', levelEn: 'CLASSIC', stars: 3,
+    desc: '以圣安德鲁斯老球场的真实配置为蓝本，无树的林克斯与深坑沙坑。',
+    seed: 53, amp: 0.8, tree: 'none', feature: 'links', extra: 0, overview: true,
+    theme: {
+      skyTop: '#4f93d8', skyBottom: '#dce9f2', fog: '#d6e2ea', sea: '#4f7f9a', sun: '#fff4dc',
+      fairwayA: '#7fba5a', fairwayB: '#73ad52', rough: '#a39a55', green: '#93d472', fringe: '#82c262',
+      sand: '#efe2bd', beach: '#cfc79a', water: '#4a86ac', trunk: '#6a5a45', leaf: '#5f8a3a',
+    },
+    // abs：沙坑與水域用每洞的絕對座標 [x, z, 半徑]，不是「沿球道位置＋橫向偏移」
+    holes: LINKS_HOLES.map((h, i) => ({ ...h, abs: true, wind: [4 + ((i * 5) % 5), (i * 67 + 20) % 360] })),
+  },
 ];
 
 // 依球場難度自動產生額外的球洞（固定亂數種子，每次都一樣）
@@ -81,16 +96,23 @@ for (const c of COURSES) {
 
 export const coursePar = (c) => c.holes.reduce((s, h) => s + h.par, 0);
 
-// 球桿：carry 為滿力落點距離(m，力量值 6 的基準)，loft 為起飛角
+// 球桿：標準的 14 支球袋。carry 為滿力落點距離(m，力量值 6 的基準)，loft 為起飛角
+// 相鄰兩支差約 10~15 m，任何距離都找得到接近滿揮的桿
 export const CLUBS = [
-  { id: '1W', zh: '一号木', en: 'DRIVER', carry: 225, loft: 13, teeOnly: true },
-  { id: '3W', zh: '三号木', en: '3 WOOD', carry: 200, loft: 15 },
-  { id: '5I', zh: '五号铁', en: '5 IRON', carry: 168, loft: 19 },
-  { id: '7I', zh: '七号铁', en: '7 IRON', carry: 143, loft: 23 },
-  { id: '9I', zh: '九号铁', en: '9 IRON', carry: 118, loft: 28 },
-  { id: 'PW', zh: '劈起杆', en: 'P WEDGE', carry: 92, loft: 35 },
-  { id: 'SW', zh: '沙坑杆', en: 'S WEDGE', carry: 62, loft: 44 },
-  { id: 'PT', zh: '推杆', en: 'PUTTER', carry: 0, loft: 0, putter: true },
+  { id: '1W', zh: '一号木', en: 'DRIVER', carry: 225, loft: 13, teeOnly: true, kind: 'wood' },
+  { id: '3W', zh: '三号木', en: '3 WOOD', carry: 205, loft: 15, kind: 'wood' },
+  { id: '5W', zh: '五号木', en: '5 WOOD', carry: 190, loft: 16.5, kind: 'wood' },
+  { id: '4I', zh: '四号铁', en: '4 IRON', carry: 178, loft: 18, kind: 'iron' },
+  { id: '5I', zh: '五号铁', en: '5 IRON', carry: 168, loft: 19.5, kind: 'iron' },
+  { id: '6I', zh: '六号铁', en: '6 IRON', carry: 158, loft: 21, kind: 'iron' },
+  { id: '7I', zh: '七号铁', en: '7 IRON', carry: 147, loft: 23, kind: 'iron' },
+  { id: '8I', zh: '八号铁', en: '8 IRON', carry: 136, loft: 25.5, kind: 'iron' },
+  { id: '9I', zh: '九号铁', en: '9 IRON', carry: 124, loft: 28, kind: 'iron' },
+  { id: 'PW', zh: '劈起杆', en: 'P WEDGE', carry: 110, loft: 32, kind: 'wedge' },
+  { id: 'AW', zh: '挖起杆', en: 'A WEDGE', carry: 95, loft: 36, kind: 'wedge' },
+  { id: 'SW', zh: '沙坑杆', en: 'S WEDGE', carry: 78, loft: 41, kind: 'wedge' },
+  { id: 'LW', zh: '高吊杆', en: 'L WEDGE', carry: 60, loft: 46, kind: 'wedge' },
+  { id: 'PT', zh: '推杆', en: 'PUTTER', carry: 0, loft: 0, putter: true, kind: 'putter' },
 ];
 
 export const LIE = {

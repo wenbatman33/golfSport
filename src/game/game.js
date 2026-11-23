@@ -7,7 +7,8 @@ import { buildHole } from './terrain.js';
 import { Ball, PHYS, BALL_R, solveSpeed, previewFlight, puttSpeedFor } from './physics.js';
 import { Golfer } from './golfer.js';
 import { Fx, sfx } from './fx.js';
-import { buildBackdrop, loadSky, waterNormal } from './scenery.js';
+import { drawOverview } from './overview.js';
+import { buildBackdrop, loadSky, waterNormal, seaMaterial, waterEnv } from './scenery.js';
 import { playBgm, setBgmMuted, isMuted } from '../audio/bgm.js';
 import { setMuted as setSfxMuted } from './fx.js';
 import { GAME, SWING, pickLayoutKey } from '../data/layout.js';
@@ -38,7 +39,7 @@ export async function startGame({ character, course, onExit }) {
       <button id="g-quit" type="button" title="退出 QUIT">✕</button>
       <button id="g-help" type="button" title="玩法说明 HOW TO PLAY">?</button>
       <button id="g-mute" type="button" title="声音 SOUND (M)">♪</button>
-      <canvas id="g-map" width="180" height="300"></canvas>
+      <canvas id="g-map" width="360" height="600"></canvas>
       <div class="g-mark g-pinMark" id="g-pinMark"><i><svg viewBox="0 0 24 24"><path d="M7 3v18" stroke="#26343c" stroke-width="2" stroke-linecap="round"/><path d="M8 4l10 4-10 4z" fill="#c8463c"/></svg></i><span id="g-pinTag"></span></div>
       <div class="g-mark g-tgtMark" id="g-tgtMark"><b id="g-tgtTag"></b></div>
       <div class="g-dock u-card">
@@ -60,8 +61,12 @@ export async function startGame({ character, course, onExit }) {
       </div>
       <div class="g-fly u-card" id="g-fly"><span class="u-lab">飞行距离 CARRY</span><b id="g-flyNum">0.0</b><small>m</small></div>
       <div class="g-hint" id="g-hint"></div>
+      <button class="g-caddie" id="g-caddie" type="button"></button>
+      <div class="g-bag u-card" id="g-bag" hidden></div>
+      <div class="g-relief" id="g-relief" hidden></div>
       <div class="g-toast" id="g-toast"></div>
       <div class="g-fete" id="g-fete"></div>
+      <div class="g-ov" id="g-ov"><div class="g-ovCard u-card"><div class="g-ovHead"><b>球场总览</b><span>COURSE MAP</span><em id="g-ovInfo"></em></div><canvas id="g-ovCv"></canvas><div class="g-ovFoot" id="g-ovFoot"></div></div></div>
     </div>
     <div class="g-overlay" id="g-tutor" hidden>
       <div class="g-board u-card g-tutorCard">
@@ -118,7 +123,7 @@ export async function startGame({ character, course, onExit }) {
   }
   scene.add(clouds);
   loadSky(course, sky, () => { clouds.visible = false; }); // 手繪天空到位後換掉幾何雲
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshStandardMaterial({ color: th.sea, roughness: 0.12, metalness: 0.35, normalMap: waterNormal(), normalScale: new THREE.Vector2(0.6, 0.6) }));
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), seaMaterial(th));
   const seaUv = sea.geometry.attributes.uv; for (let i = 0; i < seaUv.count; i++) seaUv.setXY(i, seaUv.getX(i) * 140, seaUv.getY(i) * 140);
   let backdrop = null;
   sea.rotation.x = -Math.PI / 2;
@@ -131,7 +136,17 @@ export async function startGame({ character, course, onExit }) {
   Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 160 });
   sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05;
   scene.add(hemi, sun, sun.target);
+  // 球座（開球用的小木釘）：細桿＋上方托球的小杯
+  const teePeg = new THREE.Group();
+  { const m = new THREE.MeshStandardMaterial({ color: '#f4efe2', roughness: 0.6 });
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.004, 0.042, 8), m); stem.position.y = -0.004;
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.008, 0.01, 10), m); cup.position.y = 0.02;
+    stem.castShadow = cup.castShadow = true; teePeg.add(stem, cup); }
+  teePeg.visible = false; scene.add(teePeg);
   const SUN_OFF = new THREE.Vector3(-34, 62, -28);
+  // 水面著色器共用的環境參數（太陽、天空反光色、霧）
+  waterEnv.sunDir.value.copy(SUN_OFF).normalize(); waterEnv.sunCol.value.set(th.sun); waterEnv.sky.value.set(th.skyBottom).lerp(new THREE.Color(th.skyTop), 0.35);
+  waterEnv.fogCol.value.set(th.fog); waterEnv.fogNear.value = scene.fog.near; waterEnv.fogFar.value = scene.fog.far;
 
   const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 4000);
   const camPos = new THREE.Vector3(0, 30, -30), camLook = new THREE.Vector3();
@@ -203,7 +218,7 @@ export async function startGame({ character, course, onExit }) {
     const tone = TONE[id] || (cls.includes('bad') ? 'cool' : 'plain');
     toast(`<div class="u-word t-${tone}">${letters(big)}</div>${sub ? `<span class="g-sub">${sub}</span>` : ''}`, sec, cls);
   }
-  const CLUB_ICON = { '1W': 'wood', '3W': 'wood', '5I': 'iron', '7I': 'iron', '9I': 'iron', PW: 'wedge', SW: 'wedge', PT: 'putter' };
+  const CLUB_ICON = Object.fromEntries(CLUBS.map((c) => [c.id, c.kind])); // 球桿種類（圖示與擊球聲用）
   const TURF = { tee: [th.fairwayA, '38%', '0%'], fairway: [th.fairwayA, '38%', '0%'], fringe: [th.fringe, '38%', '0%'], green: [th.green, '40%', '0%'], rough: [th.rough, '26%', '30%'], bunker: [th.sand, '22%', '22%'] };
   // 洞口俯視鏡頭：在洞口上方、稍微偏向來球方向，往下看
   function cupView() {
@@ -308,6 +323,7 @@ export async function startGame({ character, course, onExit }) {
     hole = buildHole(course, i);
     scene.add(hole.group);
     sea.position.y = hole.seaLevel;
+    sea.material.uniforms.shore.value = hole.shore.tex; sea.material.uniforms.bounds.value.copy(hole.shore.bounds);
     if (!backdrop) { backdrop = buildBackdrop(course, hole.seaLevel); scene.add(backdrop); }
     const [ws, wd] = hole.spec.wind;
     wind.set(Math.sin((wd * Math.PI) / 180) * ws, 0, Math.cos((wd * Math.PI) / 180) * ws);
@@ -323,7 +339,8 @@ export async function startGame({ character, course, onExit }) {
     $('g-holeNo').textContent = i + 1;
     $('g-par').textContent = `PAR ${hole.spec.par}`;
     $('g-holeInfo').textContent = `${hole.len} m`;
-    $('g-course').textContent = `${course.zh} ${course.en} · ${i + 1}/${course.holes.length}`;
+    $('g-course').textContent = `${course.zh} ${hole.spec.name ? `· ${hole.spec.name} ` : course.en} · ${i + 1}/${course.holes.length}`;
+    showOverview(true, 3.4); // 每洞開場先看一下這一洞在全場的位置
     $('g-windSpeed').textContent = `${ws} m`;
     updatePlayerUI();
     // 開場鏡頭：從果嶺上空飛回發球台
@@ -349,13 +366,9 @@ export async function startGame({ character, course, onExit }) {
     const d = distToPin();
     clubs = lie === 'green' ? CLUBS.filter((c) => c.putter) : CLUBS.filter((c) => (c.putter ? lie === 'fringe' : !c.teeOnly || lie === 'tee'));
     clubIdx = 0;
-    if (lie !== 'green') {
-      const cand = clubs.map((c, i) => [c, i]).filter(([c]) => !c.putter);
-      let pick = cand[0];
-      for (const ci of cand) if (clubMax(ci[0]) >= d * 0.96) pick = ci; // 清單由遠到近，取剛好夠的最短桿
-      clubIdx = pick[1];
-    }
     yaw = Math.atan2(hole.pin.x - ball.pos.x, hole.pin.z - ball.pos.z);
+    askCaddie();
+    clubIdx = caddie.idx;
     meter.mode = 'idle'; meter.pos = 0; meter.power = 0;
     spinMode = 0; powerShot = false;
     fx.resetTrail(); // 清掉上一桿的球軌跡
@@ -378,8 +391,63 @@ export async function startGame({ character, course, onExit }) {
     } else if (!tutorSeen()) showTutor();
   }
 
+  // —— 桿弟：用和實際飛行相同的物理試打，算出每支桿要用多少力量才到得了洞口（已含風與高低差）——
+  const caddie = { idx: 0, power: 1, plays: 0, notes: [] };
+  let needCache = 0;
+  function planFor(c) { // 回傳所需力量（0~1）；超過 1 表示這支桿打不到
+    const d = distToPin();
+    if (c.putter) return (d * 1.07 + Math.max(0, hole.pin.y - ball.pos.y) * 9) / puttMax();
+    const dir = tmp.set(hole.pin.x - ball.pos.x, 0, hole.pin.z - ball.pos.z).normalize().clone(), target = d * 0.96; // 留 4% 給落地後的滾動
+    const land = (p) => { const pts = previewFlight(ball.pos, dir, solveSpeed(Math.max(4, clubMax(c) * p), c.loft), c.loft, hole, wind), e = pts[pts.length - 1]; return (e.x - ball.pos.x) * dir.x + (e.z - ball.pos.z) * dir.z; };
+    const full = land(1);
+    if (full < target) return 1 + (target - full) / Math.max(1, target);
+    let lo = 0.08, hi = 1;
+    for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (land(m) < target) lo = m; else hi = m; }
+    return hi;
+  }
+  function askCaddie() {
+    const d = distToPin(), list = clubs.map((c, i) => [c, i]).filter(([c]) => !c.putter);
+    caddie.notes = [];
+    if (!list.length) { caddie.idx = 0; caddie.power = clamp(planFor(clubs[0]), 0.05, 1); caddie.plays = d; }
+    else {
+      // 先用平地無風的距離估一支，再往長桿／短桿微調：選「到得了」的最短桿（接近滿揮最好控制）
+      let k = 0; for (let i = 0; i < list.length; i++) if (clubMax(list[i][0]) >= d * 0.96) k = i;
+      let p = planFor(list[k][0]);
+      while (p > 1 && k > 0) { k--; p = planFor(list[k][0]); }
+      while (k < list.length - 1) { const q = planFor(list[k + 1][0]); if (q > 1) break; k++; p = q; }
+      caddie.idx = list[k][1]; caddie.power = clamp(p, 0.05, 1);
+      caddie.plays = (caddie.power * clubMax(list[k][0])) / 0.96; // 這一桿「打起來像」多遠
+      const dx = hole.pin.x - ball.pos.x, dz = hole.pin.z - ball.pos.z, l = Math.hypot(dx, dz) || 1, head = -(wind.x * dx + wind.z * dz) / l, dh = hole.pin.y - ball.pos.y;
+      if (head > 1.2) caddie.notes.push('逆风'); else if (head < -1.2) caddie.notes.push('顺风');
+      if (dh > 0.8) caddie.notes.push('上坡'); else if (dh < -0.8) caddie.notes.push('下坡');
+      if (lie === 'rough' || lie === 'bunker') caddie.notes.push(LIE[lie].zh);
+      if (p > 1) caddie.notes.push('够不到，先打近');
+    }
+  }
+  function updateCaddieUI() {
+    const el = $('g-caddie'), c = clubs[caddie.idx];
+    if (!c || P.ai) { el.classList.remove('show'); return; }
+    const d = distToPin(), diff = Math.round(caddie.plays - d), same = clubIdx === caddie.idx;
+    const play = c.putter || Math.abs(diff) < 2 || caddie.notes.includes('够不到，先打近') ? '' : `<i>${caddie.notes.filter((n) => n !== '够不到，先打近').join('·') || '修正'} ${diff > 0 ? '+' : ''}${diff} m</i>`;
+    el.innerHTML = `<span>杆弟 CADDIE</span><b>${c.id}</b><em>${c.zh} · 力量 ${Math.round(caddie.power * 100)}%</em>${play}${caddie.notes.includes('够不到，先打近') ? '<i>够不到，先打近</i>' : ''}${same ? '' : '<u>采用 USE</u>'}`;
+    el.classList.toggle('alt', !same);
+    el.classList.add('show');
+  }
+  function openBag(on) {
+    const el = $('g-bag');
+    if (!on || phase !== 'aim' || meter.mode !== 'idle' || P.ai) { el.hidden = true; return; }
+    el.innerHTML = `<div class="g-bagHead"><b>球袋</b><span>CLUBS</span></div>` + clubs.map((c, i) => {
+      const far = c.putter ? puttMax() : clubMax(c);
+      return `<button type="button" data-i="${i}" class="${i === clubIdx ? 'on' : ''}${i === caddie.idx ? ' rec' : ''}"><b>${c.id}</b><span>${c.zh}</span><em>${far.toFixed(far < 20 ? 1 : 0)} m</em></button>`;
+    }).join('');
+    for (const b of el.querySelectorAll('button')) b.onclick = (e) => { e.stopPropagation(); clubIdx = +b.dataset.i; sfx.select(); el.hidden = true; updateClubUI(); };
+    el.hidden = false;
+  }
+
   function updateClubUI() {
     const c = clubs[clubIdx];
+    needCache = clamp(clubIdx === caddie.idx ? caddie.power : planFor(c), 0.05, 1);
+    updateCaddieUI();
     $('g-clubId').textContent = c.id;
     $('g-clubIcon').src = `${UI}icon_${CLUB_ICON[c.id]}.webp`;
     $('g-clubName').textContent = `${c.zh} ${c.en}`;
@@ -420,7 +488,7 @@ export async function startGame({ character, course, onExit }) {
 
   // —— 擊球量表：擊球點在右端，游標往左跑到 100% 再折返 ——
   const sweetHalf = () => (powerShot && !clubs[clubIdx]?.putter ? 0.062 : 0.1); // 擊球點容許範圍（強力擊球較窄）
-  const needPower = () => { const c = clubs[clubIdx]; if (!c) return 0; return clamp(c.putter ? distToPin() / puttMax() : (distToPin() * 0.96) / clubMax(c), 0.05, 1); };
+  const needPower = () => needCache; // 建議力量（由桿弟試打算出，已含風與高低差）
   function updateMeterUI() {
     const P = (v) => ((v + 0.1) / 1.1) * 100; // 距右端的百分比
     $('g-cursor').style.left = `${100 - P(meter.pos)}%`;
@@ -497,7 +565,7 @@ export async function startGame({ character, course, onExit }) {
       const wasPower = powerShot;
       if (powerShot) { powerLeft--; powerShot = false; }
       fx.impact(ballMesh.position, dir, quality, lie, wasPower);
-      sfx.hit(quality === 'perfect'); if (lie === 'bunker') sfx.sand();
+      sfx.hit(quality === 'perfect', CLUB_ICON[s.club.id]); if (lie === 'bunker') sfx.sand();
       slowT = quality === 'perfect' ? 0.16 : 0.07; // 擊球瞬間的短暫慢動作
     }
     fx.resetTrail(); cupCam = false;
@@ -544,7 +612,12 @@ export async function startGame({ character, course, onExit }) {
       if (lavaHit) say(null, '熔岩', 'LAVA +1', 2.2, 'bad');
       else if (ev === 'water') say('call_water', '落水', 'WATER HAZARD +1', 2.2, 'bad'); else say('call_ob', '出界', 'OUT OF BOUNDS +1', 2.2, 'bad');
       bubble(P, '😅');
-      ball.place(lastPos);
+      if (ev === 'water' && P.strokes < hole.spec.par + 5) {
+        // 標準規則：罰一桿後有三種脫困方式可選（原位重打／側面拋球／後方連線拋球），不是只能重打
+        const opts = reliefOptions();
+        if (P.ai || opts.length < 2) ball.place((opts.find((o) => o.key === 'side') || opts.find((o) => o.key === 'back') || opts[0]).pos); // 對手選離洞最近的合法位置
+        else { phase = 'relief'; root.dataset.phase = 'relief'; updatePlayerUI(); after2(1.3, () => showRelief(opts, lavaHit)); return; }
+      } else ball.place(lastPos); // 出界只能原位重打
     } else {
       const l = hole.surfaceAt(ball.pos.x, ball.pos.z), dp = distToPin();
       say(null, `${dp < 30 ? dp.toFixed(1) : Math.round(dp)} m`, `距旗杆 TO PIN · ${LIE[l]?.zh ?? ''}`, 1.6);
@@ -561,6 +634,43 @@ export async function startGame({ character, course, onExit }) {
     updatePlayerUI();
     after(1.5, nextTurn);
   }
+
+  // —— 處罰區（水、熔岩）的脫困選項 ——
+  function reliefOptions() {
+    const dry = (x, z) => { const s = hole.surfaceAt(x, z); return s !== 'water' && s !== 'ob'; };
+    const at = (x, z) => new THREE.Vector3(x, hole.heightAt(x, z) + BALL_R, z), toPin = (x, z) => Math.hypot(hole.pin.x - x, hole.pin.z - z);
+    const opts = [{ key: 'replay', zh: '原位重打', en: 'STROKE & DISTANCE', note: '回到上一杆的位置', pos: lastPos.clone() }];
+    // 球最後越過處罰區邊界的點：從落水處沿著來球方向往回找到第一個乾的位置
+    let dx = lastPos.x - ball.pos.x, dz = lastPos.z - ball.pos.z; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+    let ex = ball.pos.x, ez = ball.pos.z, found = false;
+    for (let i = 0; i < 600 && i * 0.5 < l; i++) { ex += dx * 0.5; ez += dz * 0.5; if (dry(ex, ez)) { found = true; break; } }
+    if (!found) return opts;
+    const dE = toPin(ex, ez);
+    // 側面拋球：在越界點兩支球桿長（約 2 m）範圍內，不得比越界點更靠近球洞
+    let side = null;
+    for (let k = 0; k < 32; k++) for (const rr of [2, 1.4]) {
+      const a = (k / 32) * 6.283, x = ex + Math.cos(a) * rr, z = ez + Math.sin(a) * rr;
+      if (!dry(x, z) || toPin(x, z) < dE - 0.02) continue;
+      const sf = hole.surfaceAt(x, z), score = (sf === 'fairway' || sf === 'fringe' ? 3 : sf === 'bunker' ? -3 : 0) - (toPin(x, z) - dE);
+      if (!side || score > side.score) side = { score, x, z };
+    }
+    if (side) opts.push({ key: 'side', zh: '侧面抛球', en: 'LATERAL RELIEF', note: '入水点旁两杆范围内', pos: at(side.x, side.z) });
+    // 後方連線拋球：球洞與越界點連成一線，在這條線的後方拋球
+    const bx = (ex - hole.pin.x) / (dE || 1), bz = (ez - hole.pin.z) / (dE || 1);
+    for (let t = 6; t < 90; t += 1) { const x = ex + bx * t, z = ez + bz * t; if (dry(x, z) && dry(x + bx * 2, z + bz * 2) && hole.surfaceAt(x, z) !== 'bunker') { opts.push({ key: 'back', zh: '后方连线抛球', en: 'BACK-ON-THE-LINE', note: '球洞与入水点连线的后方', pos: at(x, z) }); break; } }
+    return opts;
+  }
+  function showRelief(opts, lava) {
+    const el = $('g-relief'), near = opts.reduce((m, o) => (distTo(o.pos) < distTo(m.pos) ? o : m), opts[0]);
+    el.innerHTML = `<div class="g-reliefCard u-card"><div class="g-reliefHead"><b>${lava ? '熔岩' : '落水'} · 罚一杆</b><span>PENALTY AREA +1 · 选择脱困方式</span></div>` + opts.map((o, i) => `<button type="button" data-i="${i}" class="${o === near ? 'rec' : ''}"><b>${o.zh}</b><span>${o.en}</span><small>${o.note}</small><em>距洞 ${Math.round(distTo(o.pos))} m</em></button>`).join('') + '</div>';
+    for (const b of el.querySelectorAll('button')) b.onclick = (e) => {
+      e.stopPropagation(); el.hidden = true; sfx.select();
+      ball.place(opts[+b.dataset.i].pos);
+      phase = 'settle'; updatePlayerUI(); after(0.5, nextTurn);
+    };
+    el.hidden = false;
+  }
+  const distTo = (p) => Math.hypot(hole.pin.x - p.x, hole.pin.z - p.z);
 
   function finishHole(score, emote, extra = 0) {
     P.scores[holeIdx] = score;
@@ -637,32 +747,124 @@ export async function startGame({ character, course, onExit }) {
   }
 
   // —— 小地圖 ——
-  function drawMap() {
-    const cv = $('g-map'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
-    g.clearRect(0, 0, W, H);
+  // —— 全場總覽圖：每洞開場自動出現幾秒，也可以點小地圖叫出來 ——
+  let ovTimer = 0;
+  function showOverview(on, sec = 0) {
+    const el = $('g-ov');
+    if (on) {
+      const wide = root.clientWidth > root.clientHeight;
+      drawOverview($('g-ovCv'), course, holeIdx, !!course.overview && wide, clamp(1200 / Math.min(root.clientWidth * 0.86, 1100), 1, 2.6)); // 真實球場是細長形，寬螢幕上轉成橫的
+      $('g-ovInfo').textContent = `HOLE ${holeIdx + 1} · PAR ${hole.spec.par} · ${hole.len} m`;
+      $('g-ovFoot').textContent = course.overview ? '球洞配置依真实球场绘制 · 地图数据 © OpenStreetMap contributors' : '点一下关闭 TAP TO CLOSE';
+    }
+    el.classList.toggle('show', on);
+    ovTimer = on ? sec : 0;
+  }
+
+  // —— 小地圖：地形底圖只在換洞時畫一次（mapBase），每次只重畫球、瞄準線等會動的東西 ——
+  let mapBase = null, mapFor = null;
+  const shade = (hex, f) => { const c = new THREE.Color(hex); return f <= 1 ? c.multiplyScalar(f).getStyle() : c.lerp(new THREE.Color('#ffffff'), f - 1).getStyle(); };
+  function mapXform(W, H) {
     let minX = Infinity, maxX = -Infinity;
     for (const p of hole.path) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); }
     minX -= 34; maxX += 34;
-    const minZ = -22, maxZ = hole.len + 26, k = Math.min((W - 16) / (maxX - minX), (H - 16) / (maxZ - minZ));
-    const ox = W / 2 + ((minX + maxX) / 2) * k, oy = H - 8 + minZ * k;
-    const X = (x) => ox - x * k, Y = (z) => oy - z * k; // 往上是擊球方向，左右與畫面一致
-    const pathLine = (w, col, from = 0) => { g.beginPath(); hole.path.forEach((p, i) => { if (i / (hole.path.length - 1) < from) return; g.lineTo(X(p.x), Y(p.z)); }); g.lineWidth = w * k; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = col; g.stroke(); };
-    pathLine(96, 'rgba(60, 120, 70, .55)');
-    if (hole.spec.width > 0) pathLine(hole.spec.width, th.fairwayA, 0.1); else pathLine(18, th.fairwayA, 0.78);
-    const dot = (x, z, r, col) => { g.beginPath(); g.arc(X(x), Y(z), Math.max(1.5, r * k), 0, 6.3); g.fillStyle = col; g.fill(); };
-    for (const w of hole.waters) dot(w.x, w.z, w.r, th.water);
-    dot(hole.pin.x, hole.pin.z, hole.greenR + 3, th.fringe); dot(hole.pin.x, hole.pin.z, hole.greenR, th.green);
-    for (const b of hole.bunkers) dot(b.x, b.z, b.r, th.sand);
-    g.fillStyle = '#fff'; g.fillRect(X(0) - 4, Y(0) - 2, 8, 4);
-    // 旗桿
-    g.strokeStyle = '#26343c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(X(hole.pin.x), Y(hole.pin.z)); g.lineTo(X(hole.pin.x), Y(hole.pin.z) - 11); g.stroke();
-    g.fillStyle = '#c8463c'; g.beginPath(); g.moveTo(X(hole.pin.x), Y(hole.pin.z) - 11); g.lineTo(X(hole.pin.x) + 8, Y(hole.pin.z) - 8); g.lineTo(X(hole.pin.x), Y(hole.pin.z) - 5); g.fill();
-    // 瞄準線與落點
-    if (phase === 'aim' && landing) {
-      g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(X(ball.pos.x), Y(ball.pos.z)); g.lineTo(X(landing.x), Y(landing.z)); g.stroke(); g.setLineDash([]);
-      g.strokeStyle = '#d8b55f'; g.lineWidth = 2; g.beginPath(); g.arc(X(landing.x), Y(landing.z), 4, 0, 6.3); g.stroke();
+    const S = W / 180, pad = 12 * S, minZ = -24, maxZ = hole.len + 28, k = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxZ - minZ));
+    const ox = W / 2 + ((minX + maxX) / 2) * k, oy = H / 2 + ((minZ + maxZ) / 2) * k;
+    return { S, k, X: (x) => ox - x * k, Y: (z) => oy - z * k }; // 往上是擊球方向，左右與畫面一致
+  }
+  function buildMapBase(W, H) {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d'), { S, k, X, Y } = mapXform(W, H);
+    const line = (c, w, col, from = 0) => { c.beginPath(); hole.path.forEach((p, i) => { if (i / (hole.path.length - 1) >= from) c.lineTo(X(p.x), Y(p.z)); }); c.lineWidth = w * k; c.lineCap = c.lineJoin = 'round'; c.strokeStyle = col; c.stroke(); };
+    const disc = (x, z, r, col) => { g.beginPath(); g.arc(X(x), Y(z), Math.max(1.5 * S, r * k), 0, 6.3); g.fillStyle = col; g.fill(); };
+    // 底色：外圍深、球場走廊亮
+    const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, shade(th.rough, 0.62)); bg.addColorStop(1, shade(th.rough, 0.48));
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    line(g, 104, shade(th.rough, 0.8)); line(g, 94, th.rough);
+    // 樹叢點綴（固定亂數，沿著走廊兩側）
+    let seed = hole.len * 13 + 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 46; i++) {
+      const p = hole.path[Math.floor(rnd() * (hole.path.length - 1))], sd = rnd() < 0.5 ? -1 : 1, off = 30 + rnd() * 16, r = (2.2 + rnd() * 2.2) * S;
+      const x = X(p.x + sd * off), y = Y(p.z + (rnd() - 0.5) * 10);
+      g.beginPath(); g.arc(x + 0.8 * S, y + 1 * S, r, 0, 6.3); g.fillStyle = 'rgba(0, 0, 0, .18)'; g.fill();
+      g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fillStyle = shade(th.leaf, 0.85); g.fill();
+      g.beginPath(); g.arc(x - r * 0.25, y - r * 0.25, r * 0.55, 0, 6.3); g.fillStyle = shade(th.leaf, 1.18); g.fill();
     }
-    g.beginPath(); g.arc(X(ball.pos.x), Y(ball.pos.z), 3.4, 0, 6.3); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#26343c'; g.stroke();
+    // 球道：深色描邊＋割草條紋
+    const par3 = !(hole.spec.width > 0), fw = par3 ? 18 : hole.spec.width, from = par3 ? 0.78 : 0.1;
+    line(g, fw + 3.5, shade(th.fairwayB, 0.72), from);
+    const lay = document.createElement('canvas'); lay.width = W; lay.height = H;
+    const lg = lay.getContext('2d');
+    line(lg, fw, th.fairwayA, from);
+    lg.globalCompositeOperation = 'source-atop'; lg.fillStyle = shade(th.fairwayB, 0.93);
+    for (let z = -30, i = 0; z < hole.len + 40; z += 11, i++) if (i % 2) lg.fillRect(0, Y(z + 11), W, 11 * k);
+    g.drawImage(lay, 0, 0);
+    // 水域（或熔岩）：亮邊＋波紋
+    for (const w of hole.waters) {
+      disc(w.x, w.z, w.r + 1.6, shade(th.water, 0.7)); disc(w.x, w.z, w.r, th.water);
+      g.strokeStyle = 'rgba(255, 255, 255, .45)'; g.lineWidth = 1 * S; g.lineCap = 'round';
+      for (const [dx, dz, l] of [[-0.3, 0.25, 0.4], [0.2, -0.1, 0.5], [-0.1, -0.45, 0.3]]) { g.beginPath(); g.moveTo(X(w.x + (dx + l / 2) * w.r), Y(w.z + dz * w.r)); g.lineTo(X(w.x + (dx - l / 2) * w.r), Y(w.z + dz * w.r)); g.stroke(); }
+    }
+    // 果嶺：果嶺環＋亮面
+    disc(hole.pin.x, hole.pin.z, hole.greenR + 4.2, shade(th.fringe, 0.8)); disc(hole.pin.x, hole.pin.z, hole.greenR + 3, th.fringe);
+    disc(hole.pin.x, hole.pin.z, hole.greenR, th.green); disc(hole.pin.x - hole.greenR * 0.2, hole.pin.z + hole.greenR * 0.2, hole.greenR * 0.55, shade(th.green, 1.22));
+    // 沙坑：深色邊＋亮心
+    for (const b of hole.bunkers) { disc(b.x, b.z, b.r + 1.1, shade(th.sand, 0.72)); disc(b.x, b.z, b.r, th.sand); disc(b.x - b.r * 0.15, b.z + b.r * 0.15, b.r * 0.55, shade(th.sand, 1.35)); }
+    // 距離刻度：離洞口每 100 m 一條
+    let acc = 0;
+    g.font = `600 ${8.5 * S}px ui-sans-serif, system-ui, sans-serif`; g.textBaseline = 'middle';
+    for (let i = hole.path.length - 1, next = 100; i > 0; i--) {
+      const p = hole.path[i], q = hole.path[i - 1];
+      acc += Math.hypot(p.x - q.x, p.z - q.z);
+      if (acc < next) continue;
+      const nx = -(p.z - q.z), nz = p.x - q.x, n = Math.hypot(nx, nz) || 1, hw = fw / 2 + 5;
+      g.strokeStyle = 'rgba(255, 255, 255, .8)'; g.lineWidth = 1.2 * S;
+      for (const sd of [-1, 1]) { g.beginPath(); g.moveTo(X(q.x + (nx / n) * hw * sd), Y(q.z + (nz / n) * hw * sd)); g.lineTo(X(q.x + (nx / n) * (hw + 7) * sd), Y(q.z + (nz / n) * (hw + 7) * sd)); g.stroke(); }
+      const lx = Math.min(X(q.x + (nx / n) * (hw + 10)), X(q.x - (nx / n) * (hw + 10)));
+      g.fillStyle = 'rgba(255, 255, 255, .85)'; g.textAlign = 'right'; g.fillText(String(next), lx - 1 * S, Y(q.z));
+      next += 100;
+    }
+    // 發球台
+    const tx = X(0), ty = Y(0);
+    g.fillStyle = shade(th.fairwayB, 0.75); g.beginPath(); g.roundRect(tx - 7 * S, ty - 4.5 * S, 14 * S, 9 * S, 2 * S); g.fill();
+    g.fillStyle = th.fairwayA; g.beginPath(); g.roundRect(tx - 6 * S, ty - 3.5 * S, 12 * S, 7 * S, 1.5 * S); g.fill();
+    g.fillStyle = '#fff'; for (const sd of [-1, 1]) { g.beginPath(); g.arc(tx + sd * 4 * S, ty, 1.1 * S, 0, 6.3); g.fill(); }
+    // 旗桿（含影子）
+    const px = X(hole.pin.x), py = Y(hole.pin.z);
+    g.fillStyle = 'rgba(0, 0, 0, .25)'; g.beginPath(); g.ellipse(px + 2 * S, py + 0.6 * S, 4 * S, 1.4 * S, 0, 0, 6.3); g.fill();
+    g.fillStyle = '#0d1a13'; g.beginPath(); g.arc(px, py, 1.6 * S, 0, 6.3); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 1.4 * S; g.beginPath(); g.moveTo(px, py); g.lineTo(px, py - 13 * S); g.stroke();
+    g.fillStyle = '#d8453a'; g.beginPath(); g.moveTo(px, py - 13 * S); g.lineTo(px + 9 * S, py - 10 * S); g.lineTo(px, py - 7 * S); g.fill();
+    // 內框與四周暗角
+    const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.72); vg.addColorStop(0, 'rgba(0, 0, 0, 0)'); vg.addColorStop(1, 'rgba(0, 20, 10, .35)');
+    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    return cv;
+  }
+  function drawMap() {
+    const cv = $('g-map'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    if (mapFor !== hole) { mapBase = buildMapBase(W, H); mapFor = hole; }
+    g.clearRect(0, 0, W, H); g.drawImage(mapBase, 0, 0);
+    const { S, X, Y } = mapXform(W, H);
+    // 其他球員的球
+    for (const pl of players) {
+      if (pl === P || pl.done || !pl.strokes) continue;
+      g.beginPath(); g.arc(X(pl.ball.pos.x), Y(pl.ball.pos.z), 3 * S, 0, 6.3); g.fillStyle = pl.ch.color || '#ffb347'; g.fill(); g.lineWidth = 1.2 * S; g.strokeStyle = '#fff'; g.stroke();
+    }
+    // 瞄準線與落點
+    const bx = X(ball.pos.x), by = Y(ball.pos.z);
+    if (phase === 'aim' && landing) {
+      const lx = X(landing.x), ly = Y(landing.z);
+      g.setLineDash([5 * S, 3.5 * S]); g.lineCap = 'butt';
+      g.strokeStyle = 'rgba(0, 30, 15, .45)'; g.lineWidth = 3.4 * S; g.beginPath(); g.moveTo(bx, by); g.lineTo(lx, ly); g.stroke();
+      g.strokeStyle = '#fff'; g.lineWidth = 1.7 * S; g.beginPath(); g.moveTo(bx, by); g.lineTo(lx, ly); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = 'rgba(216, 181, 95, .3)'; g.beginPath(); g.arc(lx, ly, 6.5 * S, 0, 6.3); g.fill();
+      g.strokeStyle = '#f3dc9a'; g.lineWidth = 1.8 * S; g.beginPath(); g.arc(lx, ly, 6.5 * S, 0, 6.3); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(lx, ly, 1.5 * S, 0, 6.3); g.fill();
+    }
+    // 自己的球：白球＋光暈
+    g.fillStyle = 'rgba(255, 255, 255, .3)'; g.beginPath(); g.arc(bx, by, 7 * S, 0, 6.3); g.fill();
+    g.beginPath(); g.arc(bx, by, 3.6 * S, 0, 6.3); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 1.5 * S; g.strokeStyle = '#1c3a2a'; g.stroke();
   }
   // 把世界座標的點投影成畫面上的標記位置
   const projV = new THREE.Vector3();
@@ -690,7 +892,7 @@ export async function startGame({ character, course, onExit }) {
   }
   function changeClub(d) {
     if (phase !== 'aim' || meter.mode !== 'idle' || clubs.length < 2) return;
-    clubIdx = (clubIdx + d + clubs.length) % clubs.length; sfx.tick();
+    clubIdx = (clubIdx + d + clubs.length) % clubs.length; sfx.tick(); $('g-bag').hidden = true;
     updateClubUI();
   }
   let drag = null;
@@ -717,7 +919,11 @@ export async function startGame({ character, course, onExit }) {
   $('g-help').onclick = showTutor;
   $('g-tutorOk').onclick = hideTutor;
   for (const b of root.querySelectorAll('#g-spin button')) b.onclick = () => { if (phase === 'aim' && meter.mode === 'idle') { spinMode = +b.dataset.spin; sfx.tick(); updateOptsUI(); } };
-  $('g-power').onclick = () => { if (phase !== 'aim' || meter.mode !== 'idle' || powerLeft <= 0) return; powerShot = !powerShot; sfx.select(); updateClubUI(); };
+  $('g-map').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); showOverview(true); });
+  $('g-ov').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); showOverview(false); });
+  $('g-power').onclick = () => { if (phase !== 'aim' || meter.mode !== 'idle' || powerLeft <= 0) return; powerShot = !powerShot; sfx.select(); askCaddie(); updateClubUI(); };
+  $('g-caddie').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (phase !== 'aim' || meter.mode !== 'idle' || clubIdx === caddie.idx) return; clubIdx = caddie.idx; sfx.select(); updateClubUI(); });
+  for (const id of ['g-clubIcon', 'g-clubId']) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); openBag($('g-bag').hidden); });
   $('g-quit').onclick = () => { if (phase === 'result' || window.confirm('确定退出本局？ QUIT THIS ROUND?')) exit(); };
 
   function resize() {
@@ -779,6 +985,7 @@ export async function startGame({ character, course, onExit }) {
     phaseT += dt;
     for (let i = timers.length - 1; i >= 0; i--) { timers[i].t -= dt; if (timers[i].t <= 0) { const f = timers[i].fn; timers.splice(i, 1); f(); } }
     if (afterTimer > 0) { afterTimer -= dt; if (afterTimer <= 0 && afterFn) { const f = afterFn; afterFn = null; f(); } }
+    if (ovTimer > 0) { ovTimer -= dt; if (ovTimer <= 0) $('g-ov').classList.remove('show'); }
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) $('g-toast').classList.remove('show'); }
     const L = GAME[layoutKey];
     let k = 4; // 鏡頭跟隨速度
@@ -893,9 +1100,14 @@ export async function startGame({ character, course, onExit }) {
       ball.pos.y -= dt * 0.55;
       if (sinkT <= 0) ballMesh.visible = false;
     }
+    // 球座：發球台上第一桿才有，擊出後留在原地，換人或離開發球台就收掉
+    const onTee = lie === 'tee' && P.strokes === 0 && (phase === 'aim' || phase === 'ai' || (phase === 'swing' && !swing.launched));
+    if (onTee) { teePeg.position.set(ball.pos.x, ball.pos.y - BALL_R + 0.065, ball.pos.z); teePeg.visible = true; }
+    else if (phase !== 'swing' && phase !== 'flight') teePeg.visible = false;
     for (const pl of players) {
       pl.mesh.position.copy(pl.ball.pos);
       pl.mesh.position.y += 0.07; // 果嶺面比地形高，球要抬到面上才不會陷進去
+      if (pl === P && onTee) pl.mesh.position.y += 0.02; // 開球時球架在球座上
       pl.mesh.scale.setScalar(clamp(camPos.distanceTo(pl.ball.pos) / 14, 1, 7)); // 遠距離放大，避免看不到球
       pl.dot.position.copy(pl.mesh.position);
     }
@@ -939,7 +1151,8 @@ export async function startGame({ character, course, onExit }) {
       const pulse = 1 + Math.sin(clock.elapsedTime * 4) * 0.08;
       aimRing.scale.setScalar((clubs[clubIdx]?.putter ? 0.25 : 1) * pulse * Math.max(1, camPos.distanceTo(aimRing.position) / 70));
     }
-    waterNormal().offset.set(clock.elapsedTime * 0.012, clock.elapsedTime * 0.008); // 水波流動
+    waterNormal().offset.set(clock.elapsedTime * 0.012, clock.elapsedTime * 0.008); // 熔岩流動
+    waterEnv.time.value = clock.elapsedTime; // 海與水坑的水波
     backdrop?.userData.update(clock.elapsedTime);
     fx.update(dt, camera, root.clientHeight);
     // 場景中的標記：旗桿（距離與高低差）、落點

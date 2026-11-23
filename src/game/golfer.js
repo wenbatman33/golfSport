@@ -14,6 +14,9 @@ const LEGS = {
   LeftUpLeg: [0.07, -0.96, 0.24, 'root'], LeftLeg: [0.03, -0.97, -0.2, 'root'],
   RightUpLeg: [-0.07, -0.96, 0.24, 'root'], RightLeg: [-0.03, -0.97, -0.2, 'root'],
 };
+// 手指彎曲的軸與方向（Mixamo 骨架：手指骨頭的局部座標）
+const FIST_AXIS = new THREE.Vector3(0, 0, 1), FIST_SIGN = -1;
+
 export const POSES = {
   address: {
     eul: LEAN,
@@ -61,14 +64,17 @@ export const POSES = {
     dir: { LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'], RightArm: [-0.3, -0.94, 0.08, 'Spine2'], RightForeArm: [-0.2, -0.96, 0.18, 'Spine2'] },
     flat: [],
   },
+  // 進球後的振臂打氣：右手握拳舉起（A）再用力往下收（B），來回幾下；雙腳不離地
   cheerA: {
-    eul: { Spine1: [-5, 0, 0], Head: [-10, 0, 0] },
-    dir: { LeftShoulder: [0.94, 0.3, 0.05, 'Spine2'], RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], LeftArm: [0.88, 0.3, 0.32, 'Spine2'], LeftForeArm: [0.22, 0.95, 0.2, 'Spine2'], RightArm: [-0.88, 0.3, 0.32, 'Spine2'], RightForeArm: [-0.22, 0.95, 0.2, 'Spine2'] },
+    eul: { Spine1: [-4, 4, 0], Head: [-8, 0, 0] },
+    fist: ['Right', 'Left'],
+    dir: { RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], RightArm: [-0.55, 0.62, 0.55, 'Spine2'], RightForeArm: [-0.1, 0.98, 0.15, 'Spine2'], LeftArm: [0.3, -0.92, 0.12, 'Spine2'], LeftForeArm: [0.22, -0.7, 0.68, 'Spine2'] },
     flat: [],
   },
   cheerB: {
-    eul: { Spine1: [-2, 0, 0], Head: [-5, 0, 0] },
-    dir: { LeftShoulder: [0.96, 0.22, 0.05, 'Spine2'], RightShoulder: [-0.96, 0.22, 0.05, 'Spine2'], LeftArm: [0.9, 0.22, 0.36, 'Spine2'], LeftForeArm: [0.4, 0.88, 0.25, 'Spine2'], RightArm: [-0.9, 0.22, 0.36, 'Spine2'], RightForeArm: [-0.4, 0.88, 0.25, 'Spine2'] },
+    eul: { Spine1: [5, -6, 0], Head: [4, 0, 0] },
+    fist: ['Right', 'Left'],
+    dir: { RightArm: [-0.42, -0.56, 0.71, 'Spine2'], RightForeArm: [-0.05, 0.94, 0.33, 'Spine2'], LeftArm: [0.3, -0.92, 0.12, 'Spine2'], LeftForeArm: [0.22, -0.62, 0.75, 'Spine2'] },
     flat: [],
   },
   // —— 待機手勢（選角畫面）：每組 A／B 兩個姿勢來回擺動 ——
@@ -209,6 +215,11 @@ export class Golfer {
       // L = (Dp * Wp_rest)^-1 * d * W_rest
       out[name] = Dp.clone().multiply(r.parentWorld).invert().multiply(d).multiply(r.world);
     }
+    // 握拳：把指定那隻手的四指每一節往掌心捲（繞手指骨頭自己的軸轉）
+    if (spec.fist) for (const name of Object.keys(out)) {
+      const m = /^(Left|Right)Hand(Index|Middle|Ring|Pinky)[123]$/.exec(name);
+      if (m && spec.fist.includes(m[1])) out[name] = out[name].clone().multiply(new THREE.Quaternion().setFromAxisAngle(FIST_AXIS, (m[1] === 'Right' ? FIST_SIGN : -FIST_SIGN) * 1.3));
+    }
     return out;
   }
 
@@ -323,9 +334,11 @@ export class Golfer {
     this.emoteT += dt;
     const t = this.emoteT;
     if (this.emote === 'cheer') {
-      this.applyBlend('cheerA', 'cheerB', 0.5 + 0.5 * Math.sin(t * 9));
-      if (this.model) this.model.position.y += (Math.abs(Math.sin(t * 6)) * 0.14 - (this.model.userData.hop || 0));
-      if (this.model) this.model.userData.hop = Math.abs(Math.sin(t * 6)) * 0.14;
+      // 先把拳頭舉起來，再有力地上下打氣；往下收快、往上舉慢，才有「用力」的感覺。不跳躍
+      const w = Math.sin(t * 7.5), k = Math.min(1, t * 4);
+      this.applyBlend('stand', 'cheerA', k);
+      if (k >= 1) this.applyBlend('cheerA', 'cheerB', Math.pow(0.5 - 0.5 * w, 1.6));
+      if (this.model && this.model.userData.hop) { this.model.position.y -= this.model.userData.hop; this.model.userData.hop = 0; } // 清掉舊版跳躍留下的位移
     } else if (this.emote === 'idle') {
       this.updateIdle(dt);
     } else if (this.emote === 'sad') {

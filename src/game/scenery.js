@@ -111,47 +111,215 @@ export function palmGeometry(th) {
   return out;
 }
 
-// 松樹：樹幹加四層錐形樹冠
+// 依高度上色：底部暗、頂端亮（讓樹冠、灌木有體積感）
+function shadeByHeight(geo, lo, hi, y0, y1, r, jitter = 0.08) {
+  const p = geo.attributes.position, a = new Float32Array(p.count * 3), c = new THREE.Color();
+  for (let i = 0; i < p.count; i += 3) { // 以三角形為單位上色，保持低面數的塊面感
+    const y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3, k = 1 + (r() - 0.5) * jitter;
+    c.copy(lo).lerp(hi, Math.min(1, Math.max(0, (y - y0) / (y1 - y0))));
+    for (let j = 0; j < 3; j++) { a[(i + j) * 3] = c.r * k; a[(i + j) * 3 + 1] = c.g * k; a[(i + j) * 3 + 2] = c.b * k; }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return geo;
+}
+
+// 松樹：有根的樹幹、七層鋸齒狀下垂的枝葉（內深外亮）
 export function pineGeometry(th) {
   const r = rand(5), parts = [];
-  const trunk = new THREE.CylinderGeometry(0.16, 0.28, 2.4, 7); trunk.translate(0, 1.2, 0);
-  parts.push(paint(prep(trunk), th.trunk, 0.15, r));
-  const base = new THREE.Color(th.leaf);
-  for (let i = 0; i < 4; i++) {
-    const g = new THREE.ConeGeometry(2.0 - i * 0.42, 2.3, 9, 1); g.translate(0, 2.3 + i * 1.25, 0);
-    const p = g.attributes.position;
-    for (let k = 0; k < p.count; k++) if (p.getY(k) < 2.3 + i * 1.25 - 0.9) { p.setX(k, p.getX(k) * (0.9 + r() * 0.25)); p.setZ(k, p.getZ(k) * (0.9 + r() * 0.25)); p.setY(k, p.getY(k) - r() * 0.25); }
-    parts.push(paint(prep(g), '#' + base.clone().multiplyScalar(0.8 + i * 0.12).getHexString(), 0.12, r));
+  const trunk = new THREE.CylinderGeometry(0.11, 0.34, 3.2, 7, 3); trunk.translate(0, 1.6, 0);
+  const tk = shadeByHeight(prep(trunk), new THREE.Color(th.trunk).multiplyScalar(0.7), new THREE.Color(th.trunk).multiplyScalar(1.15), 0, 3.2, r, 0.2);
+  parts.push(tk);
+  const base = new THREE.Color(th.leaf), dark = base.clone().multiplyScalar(0.55), light = base.clone().lerp(new THREE.Color('#8fdc7a'), 0.3);
+  const tiers = 7, SEG = 14;
+  for (let i = 0; i < tiers; i++) {
+    const u = i / (tiers - 1), rad = 2.25 * (1 - u * 0.8), h = 1.75 - u * 0.55, y0 = 1.55 + i * 0.95;
+    const g = new THREE.ConeGeometry(rad, h, SEG, 1); g.translate(0, y0 + h / 2, 0); g.rotateY(i * 0.7);
+    const o = prep(g), p = o.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      if (p.getY(k) > y0 + 0.05) continue;
+      const x = p.getX(k), z = p.getZ(k), rr = Math.hypot(x, z);
+      if (rr < 0.01) { p.setY(k, y0 + h * 0.3); continue; } // 底面中心往上凹，從下面看不是平的
+      const tip = Math.round((Math.atan2(z, x) - i * 0.7) / ((Math.PI * 2) / SEG)) % 2 === 0, m = tip ? 1.14 : 0.72;
+      p.setXYZ(k, x * m, y0 - (tip ? 0.38 : 0.02), z * m); // 枝尖往外往下垂，凹處往內縮
+    }
+    const col = new Float32Array(p.count * 3), c = new THREE.Color();
+    for (let k = 0; k < p.count; k += 3) {
+      let rr = 0, yy = 0; for (let j = 0; j < 3; j++) { rr += Math.hypot(p.getX(k + j), p.getZ(k + j)); yy += p.getY(k + j); }
+      const t = Math.min(1, (rr / 3 / rad) * 0.55 + u * 0.3 + ((yy / 3 - y0) / h) * 0.25), jit = 0.92 + r() * 0.16;
+      c.copy(dark).lerp(light, t);
+      for (let j = 0; j < 3; j++) { col[(k + j) * 3] = c.r * jit; col[(k + j) * 3 + 1] = c.g * jit; col[(k + j) * 3 + 2] = c.b * jit; }
+    }
+    o.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    parts.push(o);
   }
   return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
 }
 
-// 灌木：幾顆壓扁的球
-export function bushGeometry(th) {
+// 灌木：一叢大小不一的葉團，底暗頂亮，點綴小花
+export function bushGeometry(th, blossom = '#fff3f6') {
   const r = rand(9), parts = [];
-  const base = new THREE.Color(th.leaf).lerp(new THREE.Color(th.rough), 0.3);
-  for (let i = 0; i < 5; i++) {
-    const g = new THREE.IcosahedronGeometry(0.55 + r() * 0.35, 1);
-    g.scale(1, 0.75, 1); g.translate((r() - 0.5) * 1.3, 0.38 + r() * 0.25, (r() - 0.5) * 1.3);
-    parts.push(paint(prep(g), '#' + base.clone().multiplyScalar(0.85 + r() * 0.35).getHexString(), 0.14, r));
+  const base = new THREE.Color(th.leaf).lerp(new THREE.Color(th.rough), 0.25), lo = base.clone().multiplyScalar(0.55), hi = base.clone().lerp(new THREE.Color('#d9f08a'), 0.32);
+  for (let i = 0; i < 7; i++) {
+    const rad = 0.42 + r() * 0.42, g = new THREE.IcosahedronGeometry(rad, 1), a = r() * 6.28, d = i === 0 ? 0 : 0.35 + r() * 0.55;
+    g.scale(1, 0.8, 1); g.translate(Math.cos(a) * d, rad * 0.62 + (i === 0 ? 0.25 : 0), Math.sin(a) * d);
+    parts.push(shadeByHeight(prep(g), lo, hi, 0, 1.25, r, 0.12));
+  }
+  if (blossom) for (let i = 0; i < 9; i++) {
+    const a = r() * 6.28, d = r() * 0.75, g = new THREE.IcosahedronGeometry(0.05 + r() * 0.03, 0);
+    g.translate(Math.cos(a) * d, 0.82 + r() * 0.3 - d * 0.35, Math.sin(a) * d);
+    parts.push(paint(prep(g), blossom, 0.06, r));
   }
   return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
 }
-// 岩石
-export function rockGeometry(hex = '#8d8a84') {
-  const r = rand(13), g = new THREE.IcosahedronGeometry(0.8, 1), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const k = 0.75 + r() * 0.5; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.7, p.getZ(i) * k); }
-  const o = prep(g); o.computeVertexNormals();
-  return paint(o, hex, 0.16, r);
+// 岩石：兩三顆大小不一的石塊，朝上的面長青苔
+export function rockGeometry(hex = '#8d8a84', moss = '#6f9a4a') {
+  const r = rand(13), parts = [];
+  const stone = new THREE.Color(hex), mossC = moss ? new THREE.Color(moss) : null;
+  for (const [sx, x, z] of [[1, 0, 0], [0.55, 0.85, 0.3], [0.4, -0.6, 0.65]]) {
+    const g = new THREE.IcosahedronGeometry(0.8 * sx, 1), p = g.attributes.position, seen = new Map();
+    for (let i = 0; i < p.count; i++) { // 同一位置的頂點用同一個擾動，石頭才不會裂開
+      const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
+      if (!seen.has(key)) seen.set(key, 0.72 + r() * 0.5);
+      const k = seen.get(key);
+      p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.72, p.getZ(i) * k);
+    }
+    g.translate(x, 0.12 * sx, z);
+    const o = prep(g); o.computeVertexNormals();
+    const n = o.attributes.normal, q = o.attributes.position, col = new Float32Array(q.count * 3), c = new THREE.Color();
+    for (let i = 0; i < q.count; i += 3) {
+      const up = n.getY(i), jit = 0.82 + r() * 0.3;
+      c.copy(stone).multiplyScalar(0.62 + Math.max(0, up) * 0.5);
+      if (mossC && up > 0.62) c.lerp(mossC, 0.65);
+      for (let j = 0; j < 3; j++) { col[(i + j) * 3] = c.r * jit; col[(i + j) * 3 + 1] = c.g * jit; col[(i + j) * 3 + 2] = c.b * jit; }
+    }
+    o.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    parts.push(o);
+  }
+  return mergeGeometries(parts);
 }
-// 花叢（小色點）
+// 花叢：一株一株有莖、五片花瓣與花心的小花，底下有幾片葉子
 export function flowerGeometry() {
   const r = rand(17), parts = [];
-  const cols = ['#ff5a7a', '#ffd92e', '#ffffff', '#ff8a3c', '#c98bff'];
-  for (let i = 0; i < 14; i++) { const g = new THREE.IcosahedronGeometry(0.09 + r() * 0.05, 0); g.translate((r() - 0.5) * 1.6, 0.18 + r() * 0.16, (r() - 0.5) * 1.6); parts.push(paint(prep(g), cols[Math.floor(r() * cols.length)], 0.05, r)); }
-  const leaf = new THREE.IcosahedronGeometry(0.7, 0); leaf.scale(1.1, 0.22, 1.1); leaf.translate(0, 0.1, 0);
-  parts.push(paint(prep(leaf), '#3f9a44', 0.1, r));
+  const cols = ['#ff5a7a', '#ffd92e', '#ffffff', '#ff9a4c', '#c79bff', '#ff86c0'];
+  for (let i = 0; i < 12; i++) {
+    const x = (r() - 0.5) * 1.7, z = (r() - 0.5) * 1.7, h = 0.3 + r() * 0.26, col = cols[Math.floor(r() * cols.length)], lean = (r() - 0.5) * 0.3, yaw = r() * 6.28;
+    const stem = new THREE.CylinderGeometry(0.012, 0.02, h, 4); stem.translate(0, h / 2, 0);
+    const head = [];
+    for (let k = 0; k < 5; k++) {
+      const pt = new THREE.CircleGeometry(0.085, 6); pt.rotateX(-Math.PI / 2); pt.scale(1, 1, 0.62); pt.translate(0.085, 0, 0); pt.rotateZ(0.42); pt.rotateY((k / 5) * Math.PI * 2); pt.translate(0, h, 0);
+      head.push(paint(prep(pt), col, 0.1, r));
+    }
+    const core = new THREE.IcosahedronGeometry(0.04, 0); core.translate(0, h + 0.025, 0);
+    const one = mergeGeometries([paint(prep(stem), '#4f9a3c', 0.1, r), ...head, paint(prep(core), col === '#ffd92e' ? '#b0661c' : '#ffd23a', 0.05, r)]);
+    one.rotateZ(lean); one.rotateY(yaw); one.translate(x, 0, z);
+    parts.push(one);
+  }
+  for (let i = 0; i < 16; i++) { // 葉片
+    const g = new THREE.ConeGeometry(0.05, 0.26 + r() * 0.2, 3); g.translate(0, 0.14, 0); g.rotateZ((r() - 0.5) * 1.3); g.rotateY(r() * 6.28); g.translate((r() - 0.5) * 1.7, 0, (r() - 0.5) * 1.7);
+    parts.push(paint(prep(g), r() < 0.5 ? '#4f9a3c' : '#6bb84a', 0.12, r));
+  }
   return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
+}
+// 草叢：一撮往外彎的長草葉
+export function grassTuftGeometry(th) {
+  const r = rand(21), parts = [];
+  const lo = new THREE.Color(th.rough).multiplyScalar(0.8), hi = new THREE.Color(th.fairwayA).lerp(new THREE.Color('#e6f08a'), 0.3);
+  for (let i = 0; i < 11; i++) {
+    const h = 0.32 + r() * 0.34, g = new THREE.ConeGeometry(0.035, h, 3); g.translate(0, h / 2, 0); g.rotateZ(0.15 + r() * 0.55); g.rotateY(r() * 6.28); g.translate((r() - 0.5) * 0.3, 0, (r() - 0.5) * 0.3);
+    parts.push(shadeByHeight(prep(g), lo, hi, 0, 0.6, r, 0.1));
+  }
+  return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
+}
+// 水邊的蘆葦（香蒲）
+export function reedGeometry() {
+  const r = rand(23), parts = [];
+  for (let i = 0; i < 9; i++) {
+    const h = 0.9 + r() * 0.9, x = (r() - 0.5) * 0.7, z = (r() - 0.5) * 0.7, lean = (r() - 0.5) * 0.28, yaw = r() * 6.28;
+    const blade = new THREE.ConeGeometry(0.03, h, 3); blade.translate(0, h / 2, 0);
+    const list = [paint(prep(blade), r() < 0.5 ? '#6fa04a' : '#88b25a', 0.12, r)];
+    if (i % 3 === 0) { const head = new THREE.CylinderGeometry(0.035, 0.035, 0.24, 5); head.translate(0, h * 0.86, 0); list.push(paint(prep(head), '#6b4423', 0.1, r)); }
+    const one = mergeGeometries(list); one.rotateZ(lean); one.rotateY(yaw); one.translate(x, 0, z);
+    parts.push(one);
+  }
+  return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
+}
+// 睡蓮：有缺口的圓葉，part = 'pad' 葉片、'bloom' 花
+export function lilyGeometry(part) {
+  const r = rand(27);
+  if (part === 'pad') {
+    const g = new THREE.CircleGeometry(0.5, 12, 0.3, Math.PI * 2 - 0.6); g.rotateX(-Math.PI / 2);
+    return paint(prep(g), '#4fa04a', 0.16, r);
+  }
+  const parts = [];
+  for (let ring = 0; ring < 2; ring++) for (let k = 0; k < 6; k++) {
+    const pt = new THREE.ConeGeometry(0.06, 0.24 - ring * 0.06, 4); pt.translate(0, 0.12, 0); pt.rotateZ(0.95 - ring * 0.5); pt.rotateY((k / 6) * Math.PI * 2 + ring * 0.5);
+    parts.push(paint(prep(pt), ring ? '#fff1f6' : '#ff9cc4', 0.06, r));
+  }
+  const core = new THREE.IcosahedronGeometry(0.05, 0); core.translate(0, 0.06, 0); parts.push(paint(prep(core), '#ffd23a', 0.05, r));
+  return mergeGeometries(parts.map((g) => { g.computeVertexNormals(); return g; }));
+}
+
+// —— 水面著色器（海與水坑共用）：兩層流動水波、菲涅耳天空反光、太陽亮點、岸邊淺水與浪花 ——
+export const waterEnv = {
+  time: { value: 0 }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color('#ffffff') }, sky: { value: new THREE.Color('#bfe6ff') },
+  fogCol: { value: new THREE.Color('#ffffff') }, fogNear: { value: 180 }, fogFar: { value: 900 },
+};
+const WATER_VERT = 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
+const WATER_HEAD = `
+  uniform sampler2D nrm; uniform float time, fogNear, fogFar; uniform vec3 deep, shallow, sky, sunCol, sunDir, fogCol; varying vec3 vW;
+  vec3 waveN(vec2 p, float s, out vec2 a, out vec2 b) {
+    a = texture2D(nrm, p * 0.047 * s + vec2(time * 0.013, time * 0.008)).xy * 2.0 - 1.0;
+    b = texture2D(nrm, p * vec2(0.019, -0.023) * s + vec2(-time * 0.007, time * 0.011)).xy * 2.0 - 1.0;
+    return normalize(vec3((a.x + b.x) * 0.5, 1.0, (a.y + b.y) * 0.5));
+  }
+  vec3 shadeWater(vec3 base, vec3 n, float foam) {
+    vec3 v = normalize(cameraPosition - vW);
+    float fres = pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    vec3 col = mix(base, sky, clamp(fres * 0.5 + 0.03, 0.0, 1.0));
+    col += sunCol * pow(max(dot(reflect(-sunDir, n), v), 0.0), 160.0) * 1.1;
+    col = mix(col, vec3(1.0), foam);
+    return mix(col, fogCol, smoothstep(fogNear, fogFar, length(cameraPosition - vW)));
+  }`;
+const WATER_TAIL = '\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}';
+const envU = () => ({ time: waterEnv.time, sunDir: waterEnv.sunDir, sunCol: waterEnv.sunCol, sky: waterEnv.sky, fogCol: waterEnv.fogCol, fogNear: waterEnv.fogNear, fogFar: waterEnv.fogFar, nrm: { value: waterNormal() } });
+// 海：shore 是地形高度圖（相對海面），用來畫出岸邊的淺水色與一波一波的浪花
+export function seaMaterial(th) {
+  const sea = new THREE.Color(th.sea);
+  return new THREE.ShaderMaterial({
+    uniforms: { ...envU(), deep: { value: sea.clone().multiplyScalar(0.72) }, shallow: { value: sea.clone().lerp(new THREE.Color('#8ff0e0'), 0.6) }, shore: { value: null }, bounds: { value: new THREE.Vector4(0, 0, 1, 1) } },
+    vertexShader: WATER_VERT,
+    fragmentShader: `${WATER_HEAD}
+      uniform sampler2D shore; uniform vec4 bounds;
+      void main(){
+        vec2 a, b; vec3 n = waveN(vW.xz, 1.0, a, b);
+        vec2 uv = (vW.xz - bounds.xy) * bounds.zw, e = min(uv, 1.0 - uv);
+        float inside = smoothstep(0.0, 0.05, min(e.x, e.y));
+        float hgt = (texture2D(shore, clamp(uv, 0.0, 1.0)).r - 0.5) * 4.0; // 地面比海面高多少公尺（負值＝水深）
+        float shal = smoothstep(-1.9, -0.15, hgt) * inside;
+        vec3 base = mix(deep, shallow, shal * 0.9);
+        float wave = sin(hgt * 7.0 + time * 1.5 + a.x * 2.5 + b.y * 2.0) * 0.5 + 0.5;
+        float foam = smoothstep(-0.75, -0.2, hgt) * smoothstep(0.62, 0.95, wave) * 0.75;
+        foam = max(foam, smoothstep(-0.22, -0.02, hgt)) * inside;
+        foam = max(foam, smoothstep(0.9, 1.0, a.x * b.y + a.y * b.x + 0.42) * 0.25 * (1.0 - shal)); // 外海零星的白浪
+        gl_FragColor = vec4(shadeWater(base, n, clamp(foam, 0.0, 0.92)), 1.0);${WATER_TAIL}`,
+  });
+}
+// 水坑：中央深、岸邊淺，邊緣一圈淡淡的水沫
+export function pondMaterial(th, cx, cz, radius) {
+  const w = new THREE.Color(th.water);
+  return new THREE.ShaderMaterial({
+    uniforms: { ...envU(), deep: { value: w.clone().multiplyScalar(0.5) }, shallow: { value: w.clone().lerp(new THREE.Color('#bff3ea'), 0.45) }, center: { value: new THREE.Vector2(cx, cz) }, radius: { value: radius } },
+    vertexShader: WATER_VERT,
+    fragmentShader: `${WATER_HEAD}
+      uniform vec2 center; uniform float radius;
+      void main(){
+        vec2 a, b; vec3 n = waveN(vW.xz, 2.4, a, b);
+        float d = length(vW.xz - center) / radius;
+        vec3 base = mix(deep, shallow, smoothstep(0.3, 1.0, d));
+        float foam = smoothstep(0.86, 1.0, d + a.x * 0.04) * 0.55;
+        gl_FragColor = vec4(shadeWater(base, n, foam), 1.0);${WATER_TAIL}`,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
 }
 
 // 遠景：環繞的小島；火山球場加一座冒煙的火山
@@ -254,7 +422,43 @@ export function buildLandmarks(course, H) {
         add(col, r() < 0.15 ? '#5a3a2e' : '#3b3438', p.x + (r() - 0.5) * 2.6, y + h / 2 - 0.4, p.z + (r() - 0.5) * 2.6, 0.2);
       }
     }
+  } else if (course.feature === 'links') {
+    const sp = H.spec;
+    // 石造建築：方盒＋斜屋頂；rot 為朝向
+    const house = (x, z, w, d, h, rot, wall, roof) => {
+      const y = H.heightAt(x, z), body = new THREE.BoxGeometry(w, h, d); body.rotateY(rot); add(body, wall, x, y + h / 2, z, 0.08);
+      const rh = Math.min(w, d) * 0.42, top = new THREE.CylinderGeometry(0.01, 1, 1, 4, 1); top.rotateY(Math.PI / 4); top.scale((w / Math.SQRT2) * 1.06, rh, (d / Math.SQRT2) * 1.06); top.rotateY(rot); add(top, roof, x, y + h + rh / 2, z, 0.08); // 四坡屋頂，高度看短邊
+    };
+    // 把建築群推到球道外（離中心線至少 lo 公尺）
+    const away = (x, z, lo) => { const mx = 0, mz = H.len / 2; let vx = x - mx, vz = z - mz; const l = Math.hypot(vx, vz) || 1; vx /= l; vz /= l; let d = Math.min(l, 320), px = mx + vx * d, pz = mz + vz * d; for (let i = 0; i < 80 && H.distPath(px, pz).d < lo; i++) { d += 6; px = mx + vx * d; pz = mz + vz * d; } return { x: px, z: pz, vx, vz }; };
+    // 古鎮天際線：放在俱樂部會館的真實方位
+    if (sp.town) {
+      const t = away(sp.town[0], sp.town[1], 84), ax = -t.vz, az = t.vx, rot = Math.atan2(t.vx, t.vz);
+      const walls = ['#b9b0a0', '#a8a094', '#c4bba8', '#9c958a'], roofs = ['#5a5f6a', '#6a5a52', '#4f5560'];
+      for (let i = -6; i <= 6; i++) {
+        const w = 9 + r() * 7, h = 8 + r() * 7, d = 9 + r() * 4, off = i * 13 + (r() - 0.5) * 3, back = (r() - 0.5) * 10;
+        house(t.x + ax * off + t.vx * back, t.z + az * off + t.vz * back, w, d, h, rot, walls[Math.floor(r() * walls.length)], roofs[Math.floor(r() * roofs.length)]);
+      }
+      // 會館：較大的石樓與鐘樓
+      house(t.x - t.vx * 14, t.z - t.vz * 14, 26, 15, 13, rot, '#c9bfa8', '#59606c');
+      const tw = new THREE.BoxGeometry(5, 22, 5); tw.rotateY(rot); add(tw, '#c2b8a2', t.x - t.vx * 14 + ax * 8, H.heightAt(t.x, t.z) + 11, t.z - t.vz * 14 + az * 8, 0.06);
+      const spire = new THREE.ConeGeometry(4.2, 9, 4); spire.rotateY(rot + Math.PI / 4); add(spire, '#4f5560', t.x - t.vx * 14 + ax * 8, H.heightAt(t.x, t.z) + 26.5, t.z - t.vz * 14 + az * 8, 0.06);
+      const church = new THREE.ConeGeometry(2.6, 26, 6); add(church, '#8f8a84', t.x + ax * 52 + t.vx * 18, H.heightAt(t.x, t.z) + 20, t.z + az * 52 + t.vz * 18, 0.06);
+    }
+    // 球道旁的大飯店（第 17 洞開球要越過它的一角）
+    if (sp.hotel && H.distPath(sp.hotel[0], sp.hotel[1]).d < 130) {
+      let hx = sp.hotel[0], hz = sp.hotel[1]; const side = Math.sign(hx) || 1;
+      for (let i = 0; i < 40 && H.distPath(hx, hz).d < 46; i++) hx += side * 3;
+      house(hx, hz, 22, 64, 15, 0, '#e6dcc4', '#5c5a60');
+    }
+    // 小溪上的石拱橋
+    if (sp.bridge) {
+      const [bx, bz] = sp.bridge, y0 = Math.max(H.heightAt(bx, bz - 6), H.heightAt(bx, bz + 6));
+      for (let k = -4; k <= 4; k++) { const u = k / 4, deck = new THREE.BoxGeometry(2.8, 0.5, 1.5); deck.rotateX(-u * 0.32); add(deck, '#b9b0a0', bx, y0 + 1.15 * (1 - u * u) - 0.1, bz + k * 1.4, 0.1); }
+      for (const sd of [-1, 1]) for (let k = -4; k <= 4; k++) { const u = k / 4, wall = new THREE.BoxGeometry(0.35, 0.75, 1.5); wall.rotateX(-u * 0.32); add(wall, '#a8a094', bx + sd * 1.4, y0 + 1.15 * (1 - u * u) + 0.5, bz + k * 1.4, 0.1); }
+    }
   }
+
   if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts.map((o) => { o.computeVertexNormals(); return o; })), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
   return g;
 }

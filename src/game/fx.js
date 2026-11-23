@@ -6,9 +6,9 @@ const MAX = 900;
 // 球尾跡樣式：core 內芯色、tail 尾端色、w 寬度倍率、life 殘留秒數、rate 每秒星屑數、sparks 星屑顏色
 const TRAIL = {
   miss: { core: '#ffffff', tail: '#cfe9ff', w: 0.8, life: 0.9, rate: 0, sparks: [] },
-  nice: { core: '#ffffff', tail: '#5ec8ff', w: 1.15, life: 1.4, rate: 36, sparks: ['#ffffff', '#bfe9ff', '#7fd4ff'] },
-  perfect: { core: '#fffbe0', tail: '#ffb020', w: 1.5, life: 1.9, rate: 80, sparks: ['#ffffff', '#fff3b0', '#ffd92e', '#ffb347'] },
-  power: { core: '#fff4e0', tail: '#ff4a2a', w: 1.7, life: 1.9, rate: 95, sparks: ['#fff3b0', '#ffb347', '#ff6a3c', '#ff3b6a'] },
+  nice: { core: '#ffffff', tail: '#5ec8ff', w: 1.15, life: 1.4, rate: 11, sparks: ['#ffffff', '#bfe9ff', '#7fd4ff'] },
+  perfect: { core: '#fffbe0', tail: '#ffb020', w: 1.5, life: 1.9, rate: 22, sparks: ['#ffffff', '#fff6cc', '#ffe07a'] },
+  power: { core: '#fff4e0', tail: '#ff4a2a', w: 1.7, life: 1.9, rate: 28, sparks: ['#ffffff', '#ffe0b0', '#ffb07a'] },
   putt: { core: '#ffffff', tail: '#dff5d0', w: 0.6, life: 0.6, rate: 0, sparks: [] },
 };
 
@@ -54,10 +54,10 @@ export class Fx {
     this.TN = 150;
     this.tPts = []; // { p: Vector3, t: 存活秒數 }
     const tg = new THREE.BufferGeometry();
-    tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.TN * 2 * 3), 3));
-    tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.TN * 2 * 4), 4));
+    tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.TN * 3 * 3), 3));
+    tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.TN * 3 * 4), 4));
     const ix = [];
-    for (let i = 0; i < this.TN - 1; i++) ix.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+    for (let i = 0; i < this.TN - 1; i++) { const a = i * 3, b = a + 3; ix.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1); } // 每個斷面三個點：中線不透明、兩側透明，邊緣才會柔
     tg.setIndex(ix);
     this.trail = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     this.trail.frustumCulled = false;
@@ -83,6 +83,21 @@ export class Fx {
     this.head.visible = false; this.head.renderOrder = 6; this.headT = 0;
     scene.add(this.head);
     this.style = TRAIL.nice; this.camDist = 20; this.spark = 0;
+    // —— 星光（尾跡沿路灑下的小亮點）：加亮混色、柔邊、十字閃光、會閃爍 ——
+    const SN = 260; this.SN = SN; this.sn = 0;
+    this.sp = new Float32Array(SN * 3); this.sv = new Float32Array(SN * 3); this.sc = new Float32Array(SN * 3);
+    this.sa = new Float32Array(SN); this.ss = new Float32Array(SN); this.sl = new Float32Array(SN); this.sm = new Float32Array(SN); this.s0 = new Float32Array(SN); this.sph = new Float32Array(SN);
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(this.sp, 3)); sg.setAttribute('color', new THREE.BufferAttribute(this.sc, 3));
+    sg.setAttribute('alpha', new THREE.BufferAttribute(this.sa, 1)); sg.setAttribute('size', new THREE.BufferAttribute(this.ss, 1));
+    this.stars = new THREE.Points(sg, new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { scale: { value: 600 } },
+      vertexShader: 'attribute float alpha; attribute float size; attribute vec3 color; varying float vA; varying vec3 vC; uniform float scale; void main(){ vA=alpha; vC=color; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=size*scale/max(0.1,-mv.z); gl_Position=projectionMatrix*mv; }',
+      fragmentShader: 'varying float vA; varying vec3 vC; void main(){ vec2 d=(gl_PointCoord-0.5)*2.0; float r=length(d); float core=exp(-r*r*14.0); float halo=exp(-r*r*3.2)*0.28; float ray=max(exp(-abs(d.x)*30.0)*exp(-abs(d.y)*3.2), exp(-abs(d.y)*30.0)*exp(-abs(d.x)*3.2))*0.75; float k=(core+halo+ray)*smoothstep(1.0,0.75,r); gl_FragColor=vec4(vC*k*vA, 1.0); }',
+    }));
+    this.stars.frustumCulled = false; this.stars.renderOrder = 6;
+    scene.add(this.stars);
     this.shake = 0;
   }
 
@@ -158,7 +173,7 @@ export class Fx {
   }
 
   setTrail(name) { this.style = TRAIL[name] || TRAIL.nice; this.trailColor.set(this.style.core); this.trailColor2.set(this.style.tail); }
-  resetTrail() { this.tPts.length = 0; this.head.visible = false; this.spark = 0; }
+  resetTrail() { this.tPts.length = 0; this.head.visible = false; this.spark = 0; this.sl.fill(0); }
   pushTrail(pos, dt = 1 / 60) {
     this.tPts.push({ p: pos.clone(), t: 0 }); if (this.tPts.length > this.TN) this.tPts.shift();
     this.headT = 0.15;
@@ -168,7 +183,11 @@ export class Fx {
     this.spark += st.rate * dt;
     while (this.spark >= 1) {
       this.spark -= 1;
-      this.emit(pos, { count: 1, speed: 0.03 * this.camDist + 0.3, up: 0.02 * this.camDist, spread: 1, gravity: 0.5 + 0.02 * this.camDist, drag: 1.6, life: 1.1, size: 0.035 + 0.0065 * this.camDist, colors: st.sparks });
+      const i = this.sn % this.SN, d = this.camDist, col = new THREE.Color(st.sparks[Math.floor(Math.random() * st.sparks.length)]), j = 0.012 * d + 0.12; this.sn++;
+      this.sp[i * 3] = pos.x + (Math.random() - 0.5) * j; this.sp[i * 3 + 1] = pos.y + (Math.random() - 0.5) * j; this.sp[i * 3 + 2] = pos.z + (Math.random() - 0.5) * j;
+      this.sv[i * 3] = (Math.random() - 0.5) * j * 1.6; this.sv[i * 3 + 1] = (Math.random() - 0.5) * j * 1.2 - j * 0.3; this.sv[i * 3 + 2] = (Math.random() - 0.5) * j * 1.6; // 慢慢飄散、微微下沉
+      this.sc[i * 3] = col.r; this.sc[i * 3 + 1] = col.g; this.sc[i * 3 + 2] = col.b;
+      this.sl[i] = this.sm[i] = 0.7 + Math.random() * 0.7; this.s0[i] = (0.1 + 0.02 * d) * (0.6 + Math.random() * 0.9); this.sph[i] = Math.random() * 6.28;
     }
   }
 
@@ -187,6 +206,18 @@ export class Fx {
     const ga = this.points.geometry.attributes;
     ga.position.needsUpdate = ga.color.needsUpdate = ga.alpha.needsUpdate = ga.size.needsUpdate = true;
     this.points.material.uniforms.scale.value = viewH / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    // 星光：飄散、閃爍、縮小淡出
+    for (let i = 0, n2 = Math.min(this.sn, this.SN); i < n2; i++) {
+      if (this.sl[i] <= 0) { this.sa[i] = 0; continue; }
+      this.sl[i] -= dt;
+      this.sp[i * 3] += this.sv[i * 3] * dt; this.sp[i * 3 + 1] += this.sv[i * 3 + 1] * dt; this.sp[i * 3 + 2] += this.sv[i * 3 + 2] * dt;
+      const u = Math.max(0, this.sl[i] / this.sm[i]);
+      this.sa[i] = Math.min(1, u * 3) * Math.min(1, (1 - u) * 12) * (0.55 + 0.45 * Math.sin(this.sph[i] + this.sl[i] * 22));
+      this.ss[i] = this.s0[i] * (0.45 + 0.55 * u);
+    }
+    const sga = this.stars.geometry.attributes;
+    sga.position.needsUpdate = sga.color.needsUpdate = sga.alpha.needsUpdate = sga.size.needsUpdate = true;
+    this.stars.material.uniforms.scale.value = this.points.material.uniforms.scale.value;
     // 衝擊波
     for (const m of this.rings) {
       if (!m.visible) continue;
@@ -224,21 +255,22 @@ export class Fx {
       side.crossVectors(tan, toCam).normalize();
       const u = i / Math.max(1, n - 1); // 0 尾端 → 1 球
       const fade = Math.max(0, 1 - cur.t / st.life), dist = toCam.length();
-      const w = (0.022 + 0.004 * dist) * st.w * Math.pow(u, 1.4) * fade; // 細長、越靠近尾端越細
-      pos[i * 6] = cur.p.x + side.x * w; pos[i * 6 + 1] = cur.p.y + side.y * w; pos[i * 6 + 2] = cur.p.z + side.z * w;
-      pos[i * 6 + 3] = cur.p.x - side.x * w; pos[i * 6 + 4] = cur.p.y - side.y * w; pos[i * 6 + 5] = cur.p.z - side.z * w;
+      const w = (0.011 + 0.0021 * dist) * st.w * Math.pow(u, 1.4) * fade; // 內芯半寬：細，越靠近尾端越細
+      pos[i * 9] = cur.p.x + side.x * w; pos[i * 9 + 1] = cur.p.y + side.y * w; pos[i * 9 + 2] = cur.p.z + side.z * w;
+      pos[i * 9 + 3] = cur.p.x; pos[i * 9 + 4] = cur.p.y; pos[i * 9 + 5] = cur.p.z;
+      pos[i * 9 + 6] = cur.p.x - side.x * w; pos[i * 9 + 7] = cur.p.y - side.y * w; pos[i * 9 + 8] = cur.p.z - side.z * w;
       const k = u * u; // 靠近球的一段是亮白內芯，往後漸變成尾端色
       const cr = c2.r + (c1.r - c2.r) * k, cg = c2.g + (c1.g - c2.g) * k, cb = c2.b + (c1.b - c2.b) * k;
-      const al = 0.95 * Math.pow(u, 1.6) * fade;
-      for (const o of [0, 4]) { colr[i * 8 + o] = cr; colr[i * 8 + o + 1] = cg; colr[i * 8 + o + 2] = cb; colr[i * 8 + o + 3] = al; }
+      const al = 0.9 * Math.pow(u, 1.6) * fade;
+      for (let j = 0; j < 3; j++) { const o = i * 12 + j * 4; colr[o] = cr; colr[o + 1] = cg; colr[o + 2] = cb; colr[o + 3] = j === 1 ? al : 0; }
       // 光暈：中線亮、兩側透明，寬度約為內芯的 4 倍
-      const gw = w * 4.2, ga2 = 0.5 * u * fade;
+      const gw = w * 6.5, ga2 = 0.42 * u * fade;
       gp[i * 9] = cur.p.x + side.x * gw; gp[i * 9 + 1] = cur.p.y + side.y * gw; gp[i * 9 + 2] = cur.p.z + side.z * gw;
       gp[i * 9 + 3] = cur.p.x; gp[i * 9 + 4] = cur.p.y; gp[i * 9 + 5] = cur.p.z;
       gp[i * 9 + 6] = cur.p.x - side.x * gw; gp[i * 9 + 7] = cur.p.y - side.y * gw; gp[i * 9 + 8] = cur.p.z - side.z * gw;
       for (let j = 0; j < 3; j++) { const o = i * 12 + j * 4; gc[o] = c2.r; gc[o + 1] = c2.g; gc[o + 2] = c2.b; gc[o + 3] = j === 1 ? ga2 : 0; }
     }
-    this.trail.geometry.setDrawRange(0, Math.max(0, (n - 1) * 6));
+    this.trail.geometry.setDrawRange(0, Math.max(0, (n - 1) * 12));
     this.glow.geometry.setDrawRange(0, Math.max(0, (n - 1) * 12));
     this.glow.visible = st.rate > 0;
     this.glow.geometry.attributes.position.needsUpdate = this.glow.geometry.attributes.color.needsUpdate = true;
@@ -294,8 +326,27 @@ export const sfx = {
   select: () => { tone(660, 0.07, 0.16, 'triangle'); tone(990, 0.1, 0.14, 'triangle', 0.06); },
   meterSet: () => tone(1320, 0.06, 0.14, 'square'),
   whoosh: () => noise(0.32, 300, 2600, 0.5, 'bandpass', 0.8),
-  hit: (perfect) => { tone(180, 0.12, 0.7, 'sine', 0, 0.4); noise(0.06, 3000, 5000, 0.8, 'highpass'); tone(perfect ? 2400 : 1800, 0.09, 0.35, 'triangle'); if (perfect) { tone(1320, 0.3, 0.2, 'sine', 0.03); tone(1980, 0.4, 0.16, 'sine', 0.08); } },
-  putt: () => { tone(1400, 0.04, 0.4, 'triangle'); tone(240, 0.06, 0.3, 'sine'); },
+  // 擊球聲：短促的撞擊瞬態＋桿頭本身的共鳴＋低頻的「咚」，三種桿型各不相同
+  hit: (perfect, kind = 'iron') => {
+    const g = perfect ? 1 : 0.8, pitch = perfect ? 1.03 : 0.96;
+    noise(0.012, 7000, 3500, 0.85 * g, 'highpass', 0.7); // 球與桿面接觸的瞬間
+    if (kind === 'wood') { // 木桿（鈦合金空心桿頭）：清脆的「鏘」，幾個不成倍數的高頻泛音很快衰減
+      [[2950, 0.12, 0.3], [4370, 0.09, 0.22], [5980, 0.06, 0.14], [7720, 0.04, 0.08]].forEach(([f, d, v]) => tone(f * pitch, d, v * g, 'sine'));
+      tone(220, 0.07, 0.5 * g, 'sine', 0, 0.45);
+      noise(0.05, 2000, 900, 0.3 * g, 'bandpass', 1.2);
+    } else if (kind === 'wedge') { // 挖起桿：悶一點的「噗」，草皮（或沙）的摩擦聲比較明顯
+      tone(1500 * pitch, 0.035, 0.14 * g, 'sine');
+      tone(150, 0.09, 0.5 * g, 'sine', 0, 0.4);
+      noise(0.05, 1800, 800, 0.5 * g, 'bandpass', 1.2);
+      noise(0.22, 800, 250, 0.3, 'lowpass', 0.7, 0.01);
+    } else { // 鐵桿：短而扎實的「啪」，接著削過草皮
+      [[1850, 0.05, 0.22], [3100, 0.035, 0.14]].forEach(([f, d, v]) => tone(f * pitch, d, v * g, 'sine'));
+      tone(165, 0.08, 0.6 * g, 'sine', 0, 0.4);
+      noise(0.045, 2600, 1200, 0.5 * g, 'bandpass', 1.5);
+      noise(0.16, 900, 300, 0.22, 'lowpass', 0.7, 0.012);
+    }
+  },
+  putt: () => { noise(0.008, 4500, 2500, 0.3, 'highpass', 0.7); tone(1150, 0.03, 0.28, 'sine'); tone(640, 0.05, 0.24, 'sine', 0, 0.7); }, // 推桿：輕輕的一聲「叩」
   bounce: (v = 1) => { tone(140, 0.1, Math.min(0.5, 0.2 * v), 'sine', 0, 0.5); noise(0.08, 900, 300, Math.min(0.3, 0.12 * v), 'lowpass'); },
   sand: () => noise(0.3, 2400, 500, 0.5, 'bandpass', 0.6),
   splash: () => { noise(0.7, 1800, 300, 0.7, 'lowpass'); tone(300, 0.25, 0.3, 'sine', 0, 0.3); },

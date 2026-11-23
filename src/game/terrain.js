@@ -1,6 +1,6 @@
 // 依球洞資料產生 3D 地形：高度場、地表類型、沙坑／水池／果嶺、樹木、旗桿
 import * as THREE from 'three';
-import { grassTexture, greenTexture, sandTexture, waterNormal, palmGeometry, pineGeometry, bushGeometry, rockGeometry, flowerGeometry, buildLandmarks } from './scenery.js';
+import { grassTexture, greenTexture, sandTexture, waterNormal, palmGeometry, pineGeometry, bushGeometry, rockGeometry, flowerGeometry, grassTuftGeometry, reedGeometry, lilyGeometry, pondMaterial, buildLandmarks } from './scenery.js';
 
 export const OB_DIST = 58; // 離球道中心線多遠算出界
 const STEP = 2; // 地形網格間距(m)
@@ -51,8 +51,10 @@ export function buildHole(course, index) {
   const hPin = raw(pinXZ.x, pinXZ.z), hTee = raw(0, 0);
   const gx = (rnd() - 0.5) * 0.05, gz = (rnd() - 0.5) * 0.05; // 果嶺坡度
   const greenR = spec.greenR;
-  const bunkers = spec.bunkers.map((b) => ({ ...hazardCenter(b), r: b[2] }));
-  const waters = spec.water.map((w) => { const c = hazardCenter(w); return { ...c, r: w[2], level: raw(c.x, c.z) - 0.45 }; });
+  const at = (h) => (spec.abs ? { x: h[0], z: h[1] } : hazardCenter(h)); // abs：真實球場資料直接給座標
+  const inland = course.feature === 'links'; // 內陸球場：四周是延伸的草地，不沉入海裡
+  const bunkers = spec.bunkers.map((b) => ({ ...at(b), r: b[2] }));
+  const waters = spec.water.map((w) => { const c = at(w); return { ...c, r: w[2], level: raw(c.x, c.z) - 0.45 }; });
   const seaLevel = -1.5 * amp - 2.0;
 
   function trueHeight(x, z) {
@@ -61,9 +63,12 @@ export function buildHole(course, index) {
     h = mix(h, hPin + gx * (x - pinXZ.x) + gz * (z - pinXZ.z), smooth(greenR + 12, greenR + 1, dPin));
     h = mix(h, hTee, smooth(16, 6, Math.hypot(x, z)));
     for (const b of bunkers) h -= 0.6 * smooth(b.r, b.r * 0.45, Math.hypot(x - b.x, z - b.z));
-    for (const w of waters) h = mix(h, w.level - 1.3, smooth(w.r + 4, w.r - 2, Math.hypot(x - w.x, z - w.z)));
+    for (const w of waters) h = inland ? mix(h, w.level - 0.8, smooth(w.r + 2.4, w.r - 0.6, Math.hypot(x - w.x, z - w.z))) : mix(h, w.level - 1.3, smooth(w.r + 4, w.r - 2, Math.hypot(x - w.x, z - w.z))); // 內陸的小溪：窄而淺的溝
     const dp = distPath(x, z).d;
-    if (dp > 50) h -= (dp - 50) * (dp - 50) * 0.012; // 島嶼邊緣沉入海面
+    if (inland) { // 球道外是起伏的小沙丘，再往外慢慢攤平接到四周的草地
+      h += 0.75 * smooth((spec.width || 20) / 2, (spec.width || 20) / 2 + 16, dp) * (Math.sin(x * 0.11 + s2) * Math.sin(z * 0.093 + s3) + 0.5 * Math.sin(x * 0.23 - z * 0.19 + s1));
+      h = mix(h, 0, smooth(50, 70, dp));
+    } else if (dp > 50) h -= (dp - 50) * (dp - 50) * 0.012; // 島嶼邊緣沉入海面
     return h;
   }
 
@@ -112,16 +117,24 @@ export function buildHole(course, index) {
   const col = new Float32Array((nx + 1) * (nz + 1) * 3);
   const uvs = new Float32Array((nx + 1) * (nz + 1) * 2);
   const C = (hex) => new THREE.Color(hex);
-  const cFA = C(th.fairwayA), cFB = C(th.fairwayB), cR = C(th.rough), cBeach = C(th.beach), cTmp = new THREE.Color();
+  const cFA = C(th.fairwayA), cFB = C(th.fairwayB), cBeach = C(th.beach), cTmp = new THREE.Color(), cFw = new THREE.Color();
+  // 長草與球道其實是同一種草，只差在修剪高度：色相往球道靠，只是深一點、暗一點
+  const cR = C(th.rough).lerp(cFB.clone().multiplyScalar(0.66), 0.6);
   for (let j = 0; j <= nz; j++) {
     for (let i = 0; i <= nx; i++) {
       const k = j * (nx + 1) + i, x = minX + i * STEP, z = minZ + j * STEP, h = H[k];
       pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
       uvs[k * 2] = x / 7; uvs[k * 2 + 1] = z / 7;
       const dp = distPath(x, z), s = surfaceAt(x, z);
-      if (s === 'fairway' || s === 'tee' || s === 'fringe' || s === 'green') cTmp.copy(Math.floor((dp.t * len) / 9) % 2 ? cFA : cFB).multiplyScalar(Math.floor((dp.t * len) / 9) % 2 ? 1.06 : 0.94);
-      else { const n = 0.92 + 0.16 * Math.sin(x * 0.9 + z * 1.3) * Math.sin(x * 0.37 - z * 0.53); cTmp.copy(cR).multiplyScalar(n); }
-      cTmp.lerp(cBeach, smooth(49, 56, dp.d));
+      // 短草的程度 0（長草）→ 1（球道）：球道邊緣外有一圈半長草，顏色慢慢過渡而不是一刀切
+      const half = spec.width > 0 ? (dp.t > 0.1 ? spec.width / 2 : 0) : (dp.t > 0.78 ? 9 : 0);
+      let f = half ? 1 - smooth(half - 1, half + 7, dp.d) : 0;
+      f = Math.max(f, 1 - smooth(5, 13, Math.hypot(x, z)), 1 - smooth(greenR + 3, greenR + 11, Math.hypot(x - pinXZ.x, z - pinXZ.z)));
+      if (s === 'fairway' || s === 'tee' || s === 'fringe' || s === 'green') f = 1;
+      const stripe = Math.floor((dp.t * len) / 9) % 2;
+      cFw.copy(stripe ? cFA : cFB).multiplyScalar(stripe ? 1.03 : 0.97);
+      cTmp.copy(cR).multiplyScalar(0.93 + 0.14 * Math.sin(x * 0.9 + z * 1.3) * Math.sin(x * 0.37 - z * 0.53)).lerp(cFw, f);
+      if (!inland) cTmp.lerp(cBeach, smooth(49, 56, dp.d));
       if (h < seaLevel + 0.4) cTmp.multiplyScalar(0.8);
       col[k * 3] = cTmp.r; col[k * 3 + 1] = cTmp.g; col[k * 3 + 2] = cTmp.b;
     }
@@ -140,6 +153,14 @@ export function buildHole(course, index) {
   const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: grassTexture(), roughness: 0.95, metalness: 0 }));
   ground.receiveShadow = true;
   group.add(ground);
+  if (inland) { // 地形網格外圍接上一大片草地（四塊長方形圍住網格，高度與網格邊緣一致）
+    const F = 2600, quads = [[minX - F, minZ - F, maxX + F, minZ], [minX - F, maxZ, maxX + F, maxZ + F], [minX - F, minZ, minX, maxZ], [maxX, minZ, maxX + F, maxZ]], lp = [], lu = [], li = [];
+    quads.forEach(([x0, z0, x1, z1], qi) => { for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) { lp.push(x, -0.01, z); lu.push(x / 7, z / 7); } li.push(qi * 4, qi * 4 + 2, qi * 4 + 1, qi * 4 + 1, qi * 4 + 2, qi * 4 + 3); });
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3)); lg.setAttribute('uv', new THREE.Float32BufferAttribute(lu, 2)); lg.setIndex(li); lg.computeVertexNormals();
+    const land = new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ color: cR.clone().multiplyScalar(0.93), map: grassTexture(), roughness: 0.95 }));
+    land.receiveShadow = true; group.add(land);
+  }
 
   // —— 貼地圓盤（果嶺、沙坑等，邊緣清晰）——
   function disc(cx, cz, r, color, yOff, flat = null, opts = {}) {
@@ -173,9 +194,11 @@ export function buildHole(course, index) {
   const lava = course.feature === 'lava';
   const waterMeshes = waters.map((w) => {
     if (lava) disc(w.x, w.z, w.r + 3, '#2a2226', 0.03, null, { rough: 1, uvScale: 4 }); // 熔岩池外圈的焦黑岩石
-    return disc(w.x, w.z, w.r + 1.5, th.water, 0, w.level, lava ? { rough: 0.5, emissive: '#ff4a10', normalMap: waterNormal(), uvScale: 6 } : { rough: 0.08, metal: 0.3, opacity: 0.88, normalMap: waterNormal(), uvScale: 9 });
+    const m = disc(w.x, w.z, w.r + (inland ? 0.9 : 1.5), th.water, 0, w.level, lava ? { rough: 0.5, emissive: '#ff4a10', normalMap: waterNormal(), uvScale: 6 } : { rough: 0.08, metal: 0.3, normalMap: waterNormal(), uvScale: 9 });
+    if (!lava) { m.material.dispose(); m.material = pondMaterial(th, w.x, w.z, inland ? 9999 : w.r + 1.0); m.receiveShadow = false; } // 小溪由一串小圓組成，不畫各自的岸邊水沫
+    return m;
   });
-  const landmarks = buildLandmarks(course, { rnd, distPath, heightAt, surfaceAt, pin: pinXZ, pinY: heightAt(pinXZ.x, pinXZ.z), len, greenR, seaLevel, minX, maxX, minZ, maxZ });
+  const landmarks = buildLandmarks(course, { spec, rnd, distPath, heightAt, surfaceAt, pin: pinXZ, pinY: heightAt(pinXZ.x, pinXZ.z), len, greenR, seaLevel, minX, maxX, minZ, maxZ });
   group.add(landmarks);
   const gridPts = [];
   for (let a = -greenR; a <= greenR; a += 1.5) {
@@ -200,7 +223,7 @@ export function buildHole(course, index) {
   // 發球台：略高的草皮平台，套草紋並帶刈草條紋（短草，顏色比球道稍亮）
   const padGeo = new THREE.BoxGeometry(8, 0.14, 10, 8, 1, 10);
   const pp = padGeo.attributes.position, pu = padGeo.attributes.uv, padCol = new Float32Array(pp.count * 3);
-  const cPadA = new THREE.Color(th.fairwayA).lerp(new THREE.Color(th.green), 0.35), cPadB = cPadA.clone().multiplyScalar(0.9);
+  const cPadA = new THREE.Color(th.fairwayA).lerp(new THREE.Color(th.green), 0.12), cPadB = cPadA.clone().multiplyScalar(0.94);
   for (let k = 0; k < pp.count; k++) {
     pu.setXY(k, pp.getX(k) / 3.5, pp.getZ(k) / 3.5); // 與世界座標對齊的草紋
     const c = Math.floor((pp.getX(k) + 4.001) / 1) % 2 ? cPadA : cPadB; // 每 1m 一條刈草紋
@@ -234,7 +257,7 @@ export function buildHole(course, index) {
 
   // —— 樹木（InstancedMesh）——
   const spots = [];
-  for (let tries = 0; tries < 1400 && spots.length < 150; tries++) {
+  for (let tries = 0; tries < 1400 && spots.length < 150 && course.tree !== 'none'; tries++) { // 林克斯球場沒有樹
     const x = minX + rnd() * (maxX - minX), z = minZ + rnd() * (maxZ - minZ);
     const dp = distPath(x, z);
     const lo = (spec.width > 0 ? spec.width / 2 : 12) + 9;
@@ -248,7 +271,8 @@ export function buildHole(course, index) {
   const trees = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }), spots.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), tp = new THREE.Vector3();
   const treeMatrix = (t) => { q.setFromEuler(new THREE.Euler(0, t.r, 0)); return m4.compose(tp.set(t.x, t.y - 0.1, t.z), q, sc.set(t.s, t.s * (0.9 + (t.r % 1) * 0.3), t.s)); };
-  spots.forEach((t, i) => trees.setMatrixAt(i, treeMatrix(t)));
+  const tint = new THREE.Color();
+  spots.forEach((t, i) => { trees.setMatrixAt(i, treeMatrix(t)); const k = 0.86 + ((t.r * 7.3) % 1) * 0.26; trees.setColorAt(i, tint.setRGB(k * (0.97 + (t.s % 0.1)), k, k * 0.96)); }); // 每棵樹深淺略有不同
   trees.castShadow = true; trees.receiveShadow = true;
   group.add(trees);
 
@@ -263,15 +287,29 @@ export function buildHole(course, index) {
       list.push({ x, z, y: heightAt(x, z), s: scaleLo + rnd() * (scaleHi - scaleLo), r: rnd() * 6.28 });
     }
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-    list.forEach((t, i) => { q.setFromEuler(new THREE.Euler(0, t.r, 0)); mesh.setMatrixAt(i, m4.compose(tp.set(t.x, t.y - 0.05, t.z), q, sc.setScalar(t.s))); });
+    list.forEach((t, i) => { q.setFromEuler(new THREE.Euler(0, t.r, 0)); mesh.setMatrixAt(i, m4.compose(tp.set(t.x, t.y - 0.05, t.z), q, sc.setScalar(t.s))); const k = 0.88 + ((t.r * 5.7) % 1) * 0.22; mesh.setColorAt(i, tint.setRGB(k, k, k)); });
     mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
   }
   const fwHalf = spec.width > 0 ? spec.width / 2 : 10;
   const vegMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
-  scatter(bushGeometry(th), 90, fwHalf + 4, 55, 0.8, 1.9, vegMat);
-  scatter(rockGeometry(course.id === 'volcano' ? '#4f4548' : '#9a968e'), course.id === 'volcano' ? 70 : 26, fwHalf + 3, 57, 0.6, 2.4, vegMat);
-  scatter(flowerGeometry(), course.id === 'volcano' ? 20 : 70, fwHalf + 1.5, 40, 0.8, 1.4, vegMat);
+  scatter(bushGeometry(th, lava ? null : inland ? '#ffd92e' : course.id === 'coral' ? '#ffd0dc' : '#fff3f6'), inland ? 170 : 90, fwHalf + 4, inland ? 68 : 55, 0.8, inland ? 2.4 : 1.9, vegMat); // 林克斯：開黃花的荊豆叢
+  scatter(rockGeometry(lava ? '#4f4548' : '#9a968e', lava ? null : '#6f9a4a'), lava ? 60 : 24, fwHalf + 3, 57, 0.6, 2.0, vegMat);
+  scatter(flowerGeometry(), lava ? 24 : 80, fwHalf + 1.5, 40, 1.0, 1.7, vegMat);
+  scatter(grassTuftGeometry(th), inland ? 520 : 320, fwHalf + 2, inland ? 66 : 50, 0.9, inland ? 2.3 : 1.9, vegMat);
+  // 水坑邊的蘆葦與水面上的睡蓮
+  if (!lava && !inland && waters.length) {
+    const reeds = [], pads = [], blooms = [];
+    for (const w of waters) {
+      for (let i = 0; i < 26; i++) { const a = rnd() * 6.28, rr = w.r + 0.1 + rnd() * 1.7, x = w.x + Math.cos(a) * rr, z = w.z + Math.sin(a) * rr, y = heightAt(x, z); if (y > w.level - 0.35 && y < w.level + 0.9) reeds.push({ x, y, z, s: 0.8 + rnd() * 0.7, r: rnd() * 6.28 }); }
+      for (let i = 0; i < 12; i++) { const a = rnd() * 6.28, rr = w.r * (0.3 + rnd() * 0.5), t = { x: w.x + Math.cos(a) * rr, y: w.level + 0.05, z: w.z + Math.sin(a) * rr, s: 0.7 + rnd() * 0.9, r: rnd() * 6.28 }; pads.push(t); if (i % 3 === 0) blooms.push({ ...t, y: t.y + 0.02, s: t.s * 1.1 }); }
+    }
+    for (const [geo, list] of [[reedGeometry(), reeds], [lilyGeometry('pad'), pads], [lilyGeometry('bloom'), blooms]]) {
+      const mesh = new THREE.InstancedMesh(geo, vegMat, list.length);
+      list.forEach((t, i) => { q.setFromEuler(new THREE.Euler(0, t.r, 0)); mesh.setMatrixAt(i, m4.compose(tp.set(t.x, t.y, t.z), q, sc.setScalar(t.s))); });
+      mesh.castShadow = geo !== undefined; group.add(mesh);
+    }
+  }
 
   // 隱藏擋在鏡頭與目標之間的樹（a、b 為世界座標，只看水平距離）
   const hidden = new Uint8Array(spots.length);
@@ -293,9 +331,16 @@ export function buildHole(course, index) {
   const tee = new THREE.Vector3(0, teeY, 0);
   const pin = new THREE.Vector3(pinXZ.x, pinY, pinXZ.z);
 
+  // 給海面著色器用的岸線高度圖：每格存「地面比海面高多少」（±2 m 壓成 0~255）
+  const shoreData = new Uint8Array((nx + 1) * (nz + 1));
+  for (let k = 0; k < shoreData.length; k++) shoreData[k] = clamp(((H[k] - seaLevel) / 4 + 0.5) * 255, 0, 255);
+  const shoreTex = new THREE.DataTexture(shoreData, nx + 1, nz + 1, THREE.RedFormat, THREE.UnsignedByteType);
+  shoreTex.unpackAlignment = 1; shoreTex.magFilter = shoreTex.minFilter = THREE.LinearFilter; shoreTex.needsUpdate = true;
+  const shore = { tex: shoreTex, bounds: new THREE.Vector4(minX - STEP / 2, minZ - STEP / 2, 1 / ((nx + 1) * STEP), 1 / ((nz + 1) * STEP)) };
   function dispose() {
+    shoreTex.dispose();
     group.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
   }
 
-  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, landmarks, greenGrid, path, bunkers, waters, dispose };
+  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, shore, landmarks, greenGrid, path, bunkers, waters, dispose };
 }

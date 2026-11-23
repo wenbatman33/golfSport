@@ -71,7 +71,7 @@
 #g-windSpeed { font-size: 1.05em; font-weight: 700; }
 #g-quit { position: absolute; right: 1em; top: max(1em, env(safe-area-inset-top)); width: 2.6em; height: 2.6em; border: 0; border-radius: 50%; background: var(--card); color: var(--ink); font: 700 1.1em/1 var(--round); cursor: pointer; box-shadow: 0 3px 10px rgba(20, 40, 30, .18); }
 /* 右側：小地圖 */
-#g-map { position: absolute; right: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 6.2em); width: 9em; height: 15em; border-radius: 14px; background: rgba(255, 255, 255, .28); box-shadow: 0 3px 10px rgba(20, 40, 30, .15); backdrop-filter: blur(2px); }
+#g-map { position: absolute; right: 1em; top: calc(max(1em, env(safe-area-inset-top)) + 6.2em); width: 9em; height: 15em; border-radius: 14px; border: 2px solid rgba(250, 247, 238, .95); outline: 1px solid rgba(201, 163, 90, .7); outline-offset: -5px; box-shadow: 0 6px 16px rgba(10, 35, 22, .32); box-sizing: border-box; }
 /* 場景中的標記 */
 .g-mark { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); text-align: center; white-space: nowrap; will-change: transform; }
 .g-pinMark i { display: grid; place-items: center; width: 2.2em; height: 2.2em; margin: 0 auto; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); font-style: normal; }
@@ -300,18 +300,19 @@
 .cs-head { display: inline-flex; align-items: baseline; gap: .8em; margin-bottom: 18px; padding: .5em 2.2em; border-radius: 99px; background: var(--green2); color: #fff; border-bottom: 2px solid var(--gold); font-family: var(--serif); box-shadow: 0 4px 12px rgba(20, 60, 30, .25); }
 .cs-head b { font-size: 26px; letter-spacing: .1em; }
 .cs-head span { font-size: 12px; letter-spacing: .25em; }
-.cs-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.cs-card { position: relative; padding: 0 0 12px; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; overflow: hidden; border-radius: 18px; transition: transform .16s, box-shadow .16s; animation: g-rise .4s cubic-bezier(.2, 1.3, .4, 1) both; }
+.cs-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.cs-card { position: relative; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 0 0 12px; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; overflow: hidden; border-radius: 18px; transition: transform .16s, box-shadow .16s; animation: g-rise .4s cubic-bezier(.2, 1.3, .4, 1) both; }
 .cs-card:nth-child(2) { animation-delay: .07s; } .cs-card:nth-child(3) { animation-delay: .14s; }
 .cs-card:hover { transform: translateY(-8px); box-shadow: 0 0 0 4px var(--green), 0 12px 22px rgba(20, 60, 30, .3); }
-.cs-art { aspect-ratio: 3 / 2; background: var(--sky) center / cover; }
+.cs-art { flex: none; aspect-ratio: 3 / 2; background: var(--sky) center / cover; }
 .cs-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cs-holes { position: absolute; left: 0; top: 0; padding: .25em .9em .3em; border-radius: 0 0 16px 0; background: var(--green); color: #fff; }
 .cs-holes b { font-size: 26px; }
 .cs-holes small { margin-left: .3em; font-size: 11px; letter-spacing: .08em; }
-.cs-body { padding: 10px 14px 0; }
+.cs-body { flex: 1; padding: 10px 14px 0; }
+.cs-body > b { white-space: nowrap; }
 .cs-body b { font-size: 24px; }
-.cs-body span { margin-left: 8px; font-size: 12px; letter-spacing: .12em; color: var(--green2); }
+.cs-body span { margin-left: 8px; font-size: 12px; letter-spacing: .12em; color: var(--green2); white-space: nowrap; }
 .cs-body p { margin: 4px 0 8px; font: 500 13px/1.5 "PingFang SC", "Noto Sans SC", sans-serif; color: var(--ink2); min-height: 3em; }
 .cs-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; }
 .cs-meta em { font-style: normal; font-size: 12px; color: var(--ink2); margin-left: 8px; }
@@ -386,3 +387,58 @@
   .g-feteBand .u-word { font-size: 3em; } .g-fete.t-hio .g-feteBand .u-word { font-size: 2.7em; letter-spacing: .04em; }
   .g-feteBand small { font-size: .75em; letter-spacing: .3em; } .g-feteBand span { font-size: .95em; }
 }
+
+/* —— 全場總覽圖 —— */
+#g-map { pointer-events: auto; cursor: pointer; }
+.g-ov { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 28, 18, .32); opacity: 0; pointer-events: none; transition: opacity .35s; z-index: 7; }
+.g-ov.show { opacity: 1; pointer-events: auto; }
+.g-ovCard { padding: .9em 1em .7em; border-radius: 18px; max-width: 92vw; transform: translateY(12px) scale(.97); transition: transform .4s cubic-bezier(.2, .9, .2, 1); }
+.g-ov.show .g-ovCard { transform: none; }
+.g-ovHead { display: flex; align-items: baseline; gap: .6em; margin-bottom: .55em; color: var(--green2); }
+.g-ovHead b { font: 600 1.25em var(--serif); letter-spacing: .12em; }
+.g-ovHead span { font-size: .72em; letter-spacing: .28em; color: var(--gold); }
+.g-ovHead em { margin-left: auto; font-style: normal; font-weight: 700; font-size: .85em; padding: .25em .9em; border-radius: 99px; background: var(--green); color: #fff; letter-spacing: .06em; }
+#g-ovCv { display: block; max-width: min(88vw, 1100px); max-height: 66vh; width: auto; height: auto; border-radius: 12px; outline: 1px solid rgba(201, 163, 90, .7); outline-offset: -5px; }
+.g-ovFoot { margin-top: .5em; text-align: center; font-size: .68em; letter-spacing: .08em; color: rgba(20, 60, 40, .6); }
+@media (max-width: 1100px) { .cs-list { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px), (orientation: portrait) { #g-ovCv { max-height: 62vh; } .g-ovHead b { font-size: 1.05em; } .g-ovHead span { display: none; } }
+
+/* —— 桿弟推薦與球袋清單 —— */
+.g-caddie { position: absolute; left: 50%; bottom: calc(max(1em, env(safe-area-inset-bottom)) + 6.9em); transform: translateX(-50%) translateY(6px); display: flex; align-items: center; gap: .6em; padding: .34em .9em .34em .5em; border: 0; border-radius: 99px; background: rgba(250, 247, 238, .94); box-shadow: 0 3px 10px rgba(10, 35, 22, .25), inset 0 0 0 1px rgba(201, 163, 90, .6); color: var(--ink2, #2a3a33); font: inherit; font-size: .82em; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; cursor: default; z-index: 3; }
+.g-caddie.show { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+#game:not([data-phase="aim"]) .g-caddie { opacity: 0; pointer-events: none; }
+.g-caddie span { padding: .2em .8em; border-radius: 99px; background: var(--green2); color: #fff; font-size: .82em; letter-spacing: .1em; }
+.g-caddie b { font-size: 1.25em; color: var(--green2); }
+.g-caddie em { font-style: normal; font-weight: 600; }
+.g-caddie i { font-style: normal; padding: .1em .6em; border-radius: 99px; background: rgba(201, 163, 90, .22); color: #7a5a14; font-size: .9em; }
+.g-caddie u { text-decoration: none; padding: .2em .8em; border-radius: 99px; background: var(--gold); color: #fff; font-weight: 700; letter-spacing: .06em; }
+.g-caddie.alt { cursor: pointer; }
+.g-clubIcon, #g-clubId { cursor: pointer; pointer-events: auto; }
+.g-bag { position: absolute; left: max(1em, calc(50% - 37em)); bottom: calc(max(1em, env(safe-area-inset-bottom)) + 7em); display: grid; grid-template-columns: repeat(2, 1fr); gap: .3em; padding: .7em; border-radius: 16px; z-index: 5; }
+.g-bag[hidden] { display: none; }
+.g-bagHead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: .5em; margin-bottom: .2em; color: var(--green2); }
+.g-bagHead b { font: 600 1.05em var(--serif); letter-spacing: .12em; } .g-bagHead span { font-size: .68em; letter-spacing: .25em; color: var(--gold); }
+.g-bag button { display: grid; grid-template-columns: 2.6em 1fr auto; align-items: center; gap: .5em; min-width: 10.5em; padding: .38em .7em; border: 0; border-radius: 10px; background: rgba(20, 90, 55, .06); color: inherit; font: inherit; font-size: .86em; text-align: left; cursor: pointer; }
+.g-bag button b { color: var(--green2); font-size: 1.1em; } .g-bag button em { font-style: normal; font-weight: 700; }
+.g-bag button.rec { box-shadow: inset 0 0 0 1.5px var(--gold); } .g-bag button.rec span::after { content: " ★"; color: var(--gold); }
+.g-bag button.on { background: var(--green); color: #fff; } .g-bag button.on b { color: #fff; }
+@media (max-width: 767px), (orientation: portrait) {
+  .g-caddie { bottom: calc(max(.6em, env(safe-area-inset-bottom)) + 17em); font-size: .74em; gap: .4em; }
+  .g-bag { left: .6em; right: .6em; bottom: calc(max(.6em, env(safe-area-inset-bottom)) + 13.4em); grid-template-columns: repeat(2, 1fr); font-size: .92em; }
+}
+
+/* —— 落水後的脫困選擇 —— */
+.g-relief { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 28, 18, .3); z-index: 8; pointer-events: auto; }
+.g-relief[hidden] { display: none; }
+.g-reliefCard { display: grid; gap: .5em; padding: 1em 1.1em 1.1em; border-radius: 18px; width: min(26em, 90vw); animation: g-rise .35s cubic-bezier(.2, 1.2, .4, 1) both; }
+.g-reliefHead { text-align: center; margin-bottom: .2em; }
+.g-reliefHead b { display: block; font: 600 1.3em var(--serif); letter-spacing: .1em; color: var(--green2); }
+.g-reliefHead span { font-size: .7em; letter-spacing: .14em; color: var(--gold); }
+.g-reliefCard button { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name dist" "en dist" "note dist"; align-items: center; column-gap: .8em; padding: .6em .9em; border: 0; border-radius: 12px; background: rgba(20, 90, 55, .07); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.g-reliefCard button:hover { background: rgba(20, 90, 55, .14); }
+.g-reliefCard button b { grid-area: name; font-size: 1.08em; color: var(--green2); }
+.g-reliefCard button span { grid-area: en; font-size: .66em; letter-spacing: .16em; color: var(--gold); }
+.g-reliefCard button small { grid-area: note; font-size: .76em; opacity: .7; }
+.g-reliefCard button em { grid-area: dist; font-style: normal; font-weight: 700; padding: .3em .8em; border-radius: 99px; background: var(--green); color: #fff; font-size: .86em; white-space: nowrap; }
+.g-reliefCard button.rec { box-shadow: inset 0 0 0 1.5px var(--gold); }
+.g-reliefCard button.rec b::after { content: " ★ 杆弟建议"; font-size: .68em; color: var(--gold); font-weight: 600; }

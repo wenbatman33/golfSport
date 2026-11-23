@@ -61,6 +61,7 @@ export async function startGame({ character, course, onExit }) {
       <div class="g-fly u-card" id="g-fly"><span class="u-lab">飞行距离 CARRY</span><b id="g-flyNum">0.0</b><small>m</small></div>
       <div class="g-hint" id="g-hint"></div>
       <div class="g-toast" id="g-toast"></div>
+      <div class="g-fete" id="g-fete"></div>
     </div>
     <div class="g-overlay" id="g-tutor" hidden>
       <div class="g-board u-card g-tutorCard">
@@ -142,6 +143,8 @@ export async function startGame({ character, course, onExit }) {
   const ballGeo = new THREE.SphereGeometry(0.045, 20, 14), dotGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
   const fx = new Fx(scene);
   let slowT = 0, whooshed = false;
+  let cupCam = false, cupHold = 0, sinkT = 0, fete = ''; // 洞口俯視鏡頭、進洞後停留秒數、球沉入洞的動畫、目前的慶祝等級
+  const cupDir = new THREE.Vector3(0, 0, 1);
   const aimLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: '#ffffff', dashSize: 2.2, gapSize: 1.6, transparent: true, opacity: 0.85, fog: false }));
   aimLine.frustumCulled = false;
   const aimRing = new THREE.Mesh(new THREE.RingGeometry(1.25, 2.0, 48), new THREE.MeshBasicMaterial({ color: '#ffe14a', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12 }));
@@ -192,7 +195,7 @@ export async function startGame({ character, course, onExit }) {
   const faces = import.meta.glob('../../assets/concepts/*.png', { eager: true, query: '?url', import: 'default' });
   const faceOf = (id) => faces[`../../assets/concepts/${id}.png`] || '';
   const letters = (t) => [...t].map((ch, i) => (ch === ' ' ? '<i class="sp"></i>' : `<i style="--i:${i}">${ch}</i>`)).join('');
-  const TONE = { call_hio: 'great', call_albatross: 'great', call_eagle: 'great', call_birdie: 'great', call_perfect: 'great', call_par: 'good', call_nice: 'good' };
+  const TONE = { call_hio: 'great', call_albatross: 'great', call_eagle: 'great', call_birdie: 'birdie', call_perfect: 'great', call_par: 'good', call_nice: 'good' };
   // 大字用英文專業用語（純 ASCII 時），中文放在下方小標；數字或含中文時反過來
   function say(id, zh, en, sec = 2.2, cls = '') {
     const ascii = /^[\x20-\x7e]+$/.test(en || '') && !/^[0-9]/.test(zh);
@@ -202,6 +205,21 @@ export async function startGame({ character, course, onExit }) {
   }
   const CLUB_ICON = { '1W': 'wood', '3W': 'wood', '5I': 'iron', '7I': 'iron', '9I': 'iron', PW: 'wedge', SW: 'wedge', PT: 'putter' };
   const TURF = { tee: [th.fairwayA, '38%', '0%'], fairway: [th.fairwayA, '38%', '0%'], fringe: [th.fringe, '38%', '0%'], green: [th.green, '40%', '0%'], rough: [th.rough, '26%', '30%'], bunker: [th.sand, '22%', '22%'] };
+  // 洞口俯視鏡頭：在洞口上方、稍微偏向來球方向，往下看
+  function cupView() {
+    const h = layoutKey === 'PC' ? 3.4 : 4.4;
+    camPosT.set(hole.pin.x - cupDir.x * 1.1, hole.pin.y + h, hole.pin.z - cupDir.z * 1.1);
+    camLookT.set(hole.pin.x, hole.pin.y, hole.pin.z);
+  }
+  // 老鷹球／一桿進洞的橫幅
+  function showFete(tier, nm, sec) {
+    const el = $('g-fete');
+    el.className = `g-fete t-${tier}`;
+    el.innerHTML = `<div class="g-feteRays"></div><div class="g-feteBand"><small>HOLE ${holeIdx + 1} · PAR ${hole.spec.par}</small><b class="u-word">${letters(nm.en)}</b><span>${nm.zh}</span></div>`;
+    void el.offsetWidth;
+    el.classList.add('show');
+    after2(sec, () => el.classList.remove('show'));
+  }
   function toast(html, sec = 2.2, cls = '') {
     const el = $('g-toast');
     el.className = `g-toast ${cls}`;
@@ -473,15 +491,16 @@ export async function startGame({ character, course, onExit }) {
     $('g-stroke').textContent = P.strokes;
     const dir = new THREE.Vector3(Math.sin(s.yaw), 0, Math.cos(s.yaw));
     const quality = s.quality;
-    if (s.club.putter) { ball.putt(dir, s.speed); sfx.putt(); }
+    if (s.club.putter) { ball.putt(dir, s.speed); sfx.putt(); fx.setTrail('putt'); }
     else {
       ball.launch(dir, s.speed, s.club.loft, s.spinS, stats.spin, s.spin);
+      const wasPower = powerShot;
       if (powerShot) { powerLeft--; powerShot = false; }
-      fx.impact(ballMesh.position, dir, quality, lie);
+      fx.impact(ballMesh.position, dir, quality, lie, wasPower);
       sfx.hit(quality === 'perfect'); if (lie === 'bunker') sfx.sand();
       slowT = quality === 'perfect' ? 0.16 : 0.07; // 擊球瞬間的短暫慢動作
     }
-    fx.resetTrail();
+    fx.resetTrail(); cupCam = false;
     phase = 'flight'; root.dataset.phase = 'flight';
     $('g-hint').textContent = '';
   }
@@ -491,17 +510,31 @@ export async function startGame({ character, course, onExit }) {
     const other = players.find((x) => x !== P);
     const cheerOther = () => { other.golfer.setEmote('cheer'); bubble(other, '👏'); sfx.cheer(); after2(2.2, () => { if (other !== P) other.golfer.setEmote('idle'); }); };
     if (ev === 'holed') {
-      ballMesh.visible = ballDot.visible = false;
-      fx.cupIn(hole.pin); sfx.cup();
       const diff = P.strokes - hole.spec.par;
+      const tier = P.strokes === 1 ? 'hio' : diff <= -2 ? 'eagle' : diff === -1 ? 'birdie' : diff === 0 ? 'par' : 'over';
+      const quick = P.ai && aiFast; // 對手快進時不做停留演出
+      ballDot.visible = false; sinkT = 0.4; cupCam = false;
+      cupHold = quick ? 0 : { hio: 1.7, eagle: 1.3, birdie: 1.0, par: 0.9, over: 0.8 }[tier];
+      fx.cupIn(hole.pin, tier); sfx.cup();
+      if (tier === 'hio') { sfx.hio(); slowT = 0.5; } else if (tier === 'eagle') sfx.eagle(); else if (tier === 'birdie') sfx.birdie();
       const nm = P.strokes === 1 ? { zh: '一杆进洞', en: 'HOLE IN ONE' } : SCORE_NAMES[clamp(diff, -3, 3)];
       const cid = P.strokes === 1 ? 'call_hio' : { '-3': 'call_albatross', '-2': 'call_eagle', '-1': 'call_birdie', 0: 'call_par', 1: 'call_bogey', 2: 'call_dbogey', 3: 'call_tbogey' }[clamp(diff, -3, 3)];
-      say(cid, nm.zh, nm.en, 3, 'big');
+      if (tier === 'hio' || tier === 'eagle') after2(Math.max(0, cupHold - 0.35), () => showFete(tier, nm, tier === 'hio' ? 5.2 : 3.2)); else say(cid, nm.zh, nm.en, 3, 'big');
       if (shot && !shot.club.putter) award(P, 100, '切球进洞', 'CHIP IN');
       else if (shotDist > 8) award(P, 50, '长推进洞', 'LONG PUTT');
       award(P, P.strokes === 1 ? 500 : diff <= -2 ? 200 : diff === -1 ? 80 : diff === 0 ? 30 : 0, nm.zh, nm.en);
-      if (diff <= 0) { const g = golfer; after2(0.5, () => { fx.confetti(g.root.position); }); cheerOther(); } else bubble(P, '😮‍💨');
-      finishHole(P.strokes, diff <= 0 ? 'cheer' : 'stand');
+      const g = golfer;
+      if (diff <= 0) { for (let i = 0; i < (tier === 'hio' ? 4 : tier === 'eagle' ? 2 : 1); i++) after2(cupHold + 0.4 + i * 0.9, () => fx.confetti(g.root.position)); after2(cupHold, cheerOther); } else bubble(P, '😮‍💨');
+      if (tier === 'hio' || tier === 'eagle') { // 煙火：一桿進洞放一整輪，老鷹球放兩發
+        const PAL = [['#ffd92e', '#fff3b0', '#ffb347'], ['#ff6a8a', '#ffd0dc', '#ffffff'], ['#6fd6ff', '#d6f3ff', '#ffffff'], ['#9be37a', '#e4ffd0', '#ffd92e']];
+        for (let i = 0; i < (tier === 'hio' ? 9 : 2); i++) after2(cupHold + 0.5 + i * 0.55, () => {
+          const a = Math.random() * Math.PI * 2, r = 10 + Math.random() * 8;
+          tmp.set(g.root.position.x + Math.cos(a) * r, g.root.position.y + 8 + Math.random() * 6, g.root.position.z + Math.sin(a) * r);
+          fx.firework(tmp, PAL[i % PAL.length], 0.1 + 0.012 * camera.position.distanceTo(tmp)); sfx.boom();
+        });
+      }
+      fete = tier;
+      finishHole(P.strokes, diff <= 0 ? 'cheer' : 'stand', cupHold + (tier === 'hio' ? 4.2 : tier === 'eagle' ? 1.6 : tier === 'birdie' ? 0.5 : 0));
       return;
     }
     if (ev === 'water' || ev === 'ob') {
@@ -529,7 +562,7 @@ export async function startGame({ character, course, onExit }) {
     after(1.5, nextTurn);
   }
 
-  function finishHole(score, emote) {
+  function finishHole(score, emote, extra = 0) {
     P.scores[holeIdx] = score;
     P.done = true;
     phase = 'holed'; phaseT = 0; root.dataset.phase = 'holed';
@@ -538,7 +571,7 @@ export async function startGame({ character, course, onExit }) {
     golfer.face(golfer.root.position, toPin);
     golfer.setEmote(emote);
     const allDone = players.every((x) => x.done);
-    after(allDone ? 3.2 : 2.6, allDone ? showCard : nextTurn);
+    after((allDone ? 3.2 : 2.6) + extra, allDone ? showCard : nextTurn);
   }
 
   // —— 計分卡（超過 9 洞分成前九、後九兩段）——
@@ -741,6 +774,7 @@ export async function startGame({ character, course, onExit }) {
     if (disposed) return;
     let dt = Math.min(clock.getDelta(), 0.05);
     if (slowT > 0) { slowT -= dt; dt *= 0.18; }
+    else if (cupCam) dt *= 0.5; // 球滾向洞口時放慢
     if (P.ai && (phase === 'ai' || phase === 'swing' || phase === 'flight' || phase === 'settle')) dt *= aiFast ? 4 : 1.35; // 對手回合稍快，可按快進
     phaseT += dt;
     for (let i = timers.length - 1; i >= 0; i--) { timers[i].t -= dt; if (timers[i].t <= 0) { const f = timers[i].fn; timers.splice(i, 1); f(); } }
@@ -802,7 +836,7 @@ export async function startGame({ character, course, onExit }) {
 
     if (phase === 'flight') {
       const ev = ball.update(dt, hole, wind);
-      fx.pushTrail(ballMesh.position);
+      fx.pushTrail(ballMesh.position, dt);
       $('g-flyNum').textContent = Math.hypot(ball.pos.x - lastPos.x, ball.pos.z - lastPos.z).toFixed(1);
       root.dataset.putt = swing.shot?.club.putter ? '1' : '';
       const putt = swing.shot?.club.putter;
@@ -813,14 +847,28 @@ export async function startGame({ character, course, onExit }) {
       camPosT.y = Math.max(hole.heightAt(camPosT.x, camPosT.z) + 1.5, ball.pos.y + (putt ? L.puttUp : L.flyUp + hgt * 0.15));
       camLookT.copy(ball.pos);
       k = putt ? 3 : 5;
+      // 球朝洞口滾過去時，鏡頭升到洞口上方往下看
+      const dpx = hole.pin.x - ball.pos.x, dpz = hole.pin.z - ball.pos.z, dpin = Math.hypot(dpx, dpz), sp = Math.hypot(ball.vel.x, ball.vel.z);
+      if (!cupCam) {
+        if (!(P.ai && aiFast) && dpin < 2 && hgt < 0.6 && sp > 0.15 && sp < 4.5 && dpx * ball.vel.x + dpz * ball.vel.z > 0 && Math.abs(dpx * ball.vel.z - dpz * ball.vel.x) / sp < 0.3) { cupCam = true; cupDir.set(ball.vel.x, 0, ball.vel.z).normalize(); }
+      } else if (dpin > 2.8 || ev === 'stop' || ev === 'water' || ev === 'ob') cupCam = false;
+      if (cupCam) { cupView(); k = 6; }
       $('g-dist').textContent = `${distToPin().toFixed(distToPin() < 30 ? 1 : 0)} m`;
       if (ev) { const sh = swing.shot; swing.shot = null; onBallEvent(ev, sh); }
+    } else if (phase === 'holed' && phaseT < cupHold) {
+      cupView(); k = 6; // 進洞後先在洞口上方停一下
+    } else if (phase === 'holed' && fete === 'hio') { // 一桿進洞：鏡頭繞著球員轉
+      const g = golfer.root.position, a = golfer.root.rotation.y + (phaseT - cupHold) * 0.55;
+      camPosT.set(g.x + Math.sin(a) * 5.4, 0, g.z + Math.cos(a) * 5.4);
+      camPosT.y = Math.max(hole.heightAt(camPosT.x, camPosT.z) + 1, g.y + 1.3);
+      camLookT.set(g.x, g.y + golfer.height * 1.0, g.z); // 看高一點，讓球員落在畫面下半、不被字擋住
+      k = 3;
     } else if (phase === 'holed') {
       const g = golfer.root.position;
       tmp.set(hole.pin.x - g.x, 0, hole.pin.z - g.z).normalize();
       camPosT.copy(g).addScaledVector(tmp, 5.2).add(right.set(-tmp.z, 0, tmp.x).multiplyScalar(1.6));
       camPosT.y = Math.max(hole.heightAt(camPosT.x, camPosT.z) + 1, g.y + 1.5);
-      camLookT.set(g.x, g.y + golfer.height * 0.6, g.z);
+      camLookT.set(g.x, g.y + golfer.height * 1.0, g.z); // 看高一點，讓球員落在畫面下半、不被成績大字擋住
       k = 2.5;
     } else if (phase === 'result') {
       const g = golfer.root.position, a = phaseT * 0.25;
@@ -832,12 +880,19 @@ export async function startGame({ character, course, onExit }) {
       k = 2.5;
     }
 
+    hole.flag.visible = !(cupCam || (phase === 'holed' && phaseT < cupHold)); // 俯視洞口時收起旗桿，才不會擋住畫面
     for (const pl of players) pl.golfer.update(dt);
     const a = 1 - Math.exp(-k * dt);
     camPos.lerp(camPosT, a); camLook.lerp(camLookT, a);
     camera.position.copy(camPos);
     if (fx.shake > 0) camera.position.add(tmp.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(fx.shake));
     camera.lookAt(camLook);
+    if (sinkT > 0) { // 球滑進洞口再沉下去
+      sinkT -= dt;
+      ball.pos.x += (hole.pin.x - ball.pos.x) * Math.min(1, dt * 14); ball.pos.z += (hole.pin.z - ball.pos.z) * Math.min(1, dt * 14);
+      ball.pos.y -= dt * 0.55;
+      if (sinkT <= 0) ballMesh.visible = false;
+    }
     for (const pl of players) {
       pl.mesh.position.copy(pl.ball.pos);
       pl.mesh.position.y += 0.07; // 果嶺面比地形高，球要抬到面上才不會陷進去

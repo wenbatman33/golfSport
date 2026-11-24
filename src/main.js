@@ -273,7 +273,8 @@ const dev = createDevTool({
   getClips: () => Object.keys(actions),
   playClip,
 });
-$('devBtn').onclick = () => dev.toggle();
+// 開發工具只在本機開發（npm run dev）時提供；正式版把齒輪按鈕拿掉，玩家打不開
+if (import.meta.env.DEV) $('devBtn').onclick = () => dev.toggle(); else $('devBtn').remove();
 
 // —— 球場選擇 → 進入遊戲 ——
 let inGame = false;
@@ -306,7 +307,7 @@ function enterGame(course) {
     applyLayout();
     title.show();
     playBgm('menu');
-  } }).then((g) => { window.__game = g; }); // 供測試與除錯用
+  } }).then((g) => { if (import.meta.env.DEV) window.__game = g; }); // 只在本機開發時留給測試與除錯用，正式版不對外開放
 }
 $('confirmBtn').onclick = openCourseSelect;
 

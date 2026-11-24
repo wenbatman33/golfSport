@@ -935,7 +935,7 @@ export async function startGame({ character, course, onExit }) {
         if (e.code === 'ArrowUp') changeClub(-1);
         if (e.code === 'ArrowDown') changeClub(1);
       }
-      if (e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey) toggleDev();
+      if (import.meta.env.DEV && e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey) toggleDev(); // 開發工具只在本機開發時能開
       if (e.key.toLowerCase() === 'm' && !e.metaKey && !e.ctrlKey) toggleMute();
     }
     if (e.type === 'keyup' && e.code === 'Space') releaseSwing();

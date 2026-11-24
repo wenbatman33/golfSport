@@ -120,7 +120,7 @@ export function createDevTool(ctx) {
     open = !open;
     if (open) gui.show(); else { gui.hide(); state.drag = false; ctx.controls.enabled = true; refresh(); }
   }
-  window.addEventListener('keydown', (e) => {
+  if (import.meta.env.DEV) window.addEventListener('keydown', (e) => { // 正式版不監聽 D 鍵
     if (document.body.dataset.mode !== 'game' && e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') toggle();
   });
 

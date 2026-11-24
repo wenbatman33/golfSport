@@ -555,21 +555,24 @@ export async function startGame({ character, course, onExit }) {
   //  1. 還沒放開就不接受下一次按下（有些裝置按住時會重複送出按下事件）
   //  2. 放開後 110 毫秒內不接受新的按下（放開瞬間的彈跳）
   //  3. 兩次之間至少隔 250 毫秒（微動開關連點、觸控板連點）
-  let lastPress = 0, lastRelease = 0, held = false;
+  let lastPress = 0, lastRelease = 0, held = false, lockUntil = 0;
   const releaseSwing = () => { if (held) { held = false; lastRelease = performance.now(); } };
   const downSpeed = () => (1 / SWING.meterDown) * (1.5 - stats.accuracy * 0.045);
   function pressSwing(fromInput = false) {
     if (phase !== 'aim' || tutorOpen || P.ai) return;
     const now = performance.now();
-    if (fromInput) { if (held || now - lastPress < 250 || now - lastRelease < 110) return; held = true; }
+    // 4. 每按一下之後鎖住一小段時間：壞掉的滑鼠微動開關會把一次點擊送成兩次，間隔可能長達三四百毫秒
+    if (fromInput) { if (held || now < lockUntil || now - lastPress < 250 || now - lastRelease < 110) return; held = true; }
     lastPress = now;
     sfx.unlock();
-    if (meter.mode === 'idle') { meter.mode = 'up'; meter.pos = 0; sfx.tick(); }
+    if (meter.mode === 'idle') { meter.mode = 'up'; meter.pos = 0; meter.dir = 1; lockUntil = now + 320; sfx.tick(); }
     else if (meter.mode === 'up') {
       meter.power = clamp(meter.pos, 0.06, 1); meter.mode = 'down'; sfx.meterSet();
-      // 定完力量後，游標回到擊球點至少要 0.6 秒：力量小的時候不會「才按完就已經過頭」
+      // 定完力量後，游標回到擊球點至少要 0.85 秒，其中前 0.45 秒不接受按鍵：
+      // 連點的第二下落在鎖定時間內會被丟掉，不會變成「定完力量就直接擊球」
       meter.pos = Math.max(meter.power, 0.22);
-      meter.vDown = Math.min(downSpeed(), (meter.pos - 0.1) / 0.6);
+      meter.vDown = Math.min(downSpeed(), (meter.pos - 0.1) / 0.85);
+      lockUntil = now + 450;
     }
     else if (meter.mode === 'down') finishMeter(meter.pos);
     updateMeterUI();
@@ -1069,8 +1072,11 @@ export async function startGame({ character, course, onExit }) {
         if (keys.ArrowLeft) { yaw += sp * dt; previewDirty = true; }
         if (keys.ArrowRight) { yaw -= sp * dt; previewDirty = true; }
       } else if (meter.mode === 'up') {
-        meter.pos += dt / SWING.meterUp;
-        if (meter.pos >= 1) { meter.pos = 1; meter.power = 1; meter.mode = 'down'; meter.vDown = downSpeed(); }
+        // 力量條到頂不會自己定下來，而是來回擺動，等玩家按第二下才定力量
+        // （原本到頂就自動進入「擊球點」階段，慢一點按的第二下會被當成擊球）
+        meter.pos += (meter.dir || 1) * dt / SWING.meterUp;
+        if (meter.pos >= 1) { meter.pos = 1; meter.dir = -1; }
+        else if (meter.pos <= 0.06) { meter.pos = 0.06; meter.dir = 1; }
         updateMeterUI();
       } else if (meter.mode === 'down') {
         meter.pos -= dt * (meter.vDown || downSpeed());

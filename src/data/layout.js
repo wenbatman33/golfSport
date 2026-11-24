@@ -48,4 +48,4 @@ export const GAME = {
   MOBILE: { viewShift: 0.13, fov: 45, back: 8.8, up: 3.0, side: 0.3, look: 40, puttBack: 5.8, puttUp: 2.6, flyBack: 10, flyUp: 3.6, puttLook: 0.9 },
 };
 // 揮桿節奏（秒）
-export const SWING = { back: 0.7, hold: 0.12, down: 0.2, follow: 0.45, puttBack: 0.5, puttDown: 0.28, puttFollow: 0.35, meterUp: 1.05, meterDown: 1.2 };
+export const SWING = { back: 0.7, hold: 0.12, down: 0.2, follow: 0.45, puttBack: 0.5, puttDown: 0.28, puttFollow: 0.35, meterUp: 1.4, meterDown: 1.2 };

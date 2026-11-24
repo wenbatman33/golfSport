@@ -132,13 +132,13 @@ export class Fx {
 
   // —— 各種情境 ——
   impact(pos, dir, quality, surf, power = false) { // 擊球瞬間
-    this.burst(pos, quality === 'perfect' ? 1.3 : 0.8);
-    if (quality === 'perfect') this.beam(pos, '#ffe08a', 1.2); else if (quality === 'nice') this.beam(pos, '#ffffff', 0.55);
-    this.ring(pos, true, quality === 'perfect' ? 4.5 : 2.6, 0.35, quality === 'perfect' ? '#ffd92e' : '#ffffff');
+    this.burst(pos, quality === 'perfect' ? 0.6 : 0.3);
+    if (quality === 'perfect') this.beam(pos, '#ffe08a', 0.5); // 只有完美擊球才有一道細光柱
+    this.ring(pos, true, quality === 'perfect' ? 2.4 : 1.4, 0.3, quality === 'perfect' ? '#ffd92e' : '#ffffff');
     const turf = surf === 'bunker' ? ['#f1dfa6', '#e2cc8a'] : ['#4f9a3a', '#6bbf4c', '#7a5a3a'];
     this.emit(pos, { count: surf === 'bunker' ? 46 : 26, speed: 2.4, up: 3.4, spread: 0.7, life: 0.7, size: 0.1, colors: turf, dir });
     if (quality === 'perfect') this.emit(pos, { count: 30, speed: 5, up: 2.5, spread: 1, gravity: 2, life: 0.5, size: 0.14, colors: ['#ffd92e', '#fff3b0', '#ff8a3c'] });
-    this.shake = quality === 'perfect' ? 0.22 : 0.1;
+    this.shake = quality === 'perfect' ? 0.14 : 0.06;
     this.setTrail(power && quality !== 'miss' ? 'power' : quality);
   }
   land(pos, surf, power = 1) { // 落地
@@ -264,7 +264,7 @@ export class Fx {
       const al = 0.9 * Math.pow(u, 1.6) * fade;
       for (let j = 0; j < 3; j++) { const o = i * 12 + j * 4; colr[o] = cr; colr[o + 1] = cg; colr[o + 2] = cb; colr[o + 3] = j === 1 ? al : 0; }
       // 光暈：中線亮、兩側透明，寬度約為內芯的 4 倍
-      const gw = w * 6.5, ga2 = 0.42 * u * fade;
+      const gw = w * 4.2, ga2 = 0.18 * u * fade;
       gp[i * 9] = cur.p.x + side.x * gw; gp[i * 9 + 1] = cur.p.y + side.y * gw; gp[i * 9 + 2] = cur.p.z + side.z * gw;
       gp[i * 9 + 3] = cur.p.x; gp[i * 9 + 4] = cur.p.y; gp[i * 9 + 5] = cur.p.z;
       gp[i * 9 + 6] = cur.p.x - side.x * gw; gp[i * 9 + 7] = cur.p.y - side.y * gw; gp[i * 9 + 8] = cur.p.z - side.z * gw;
@@ -280,9 +280,9 @@ export class Fx {
       const hp = this.tPts[n - 1].p;
       this.camDist = camera.position.distanceTo(hp);
       this.head.position.copy(hp);
-      this.head.scale.setScalar((0.18 + 0.03 * this.camDist) * st.w);
+      this.head.scale.setScalar((0.11 + 0.018 * this.camDist) * st.w);
       this.head.material.color.copy(c2).lerp(c1, 0.55);
-      this.head.material.opacity = Math.min(1, this.headT / 0.15) * 0.9;
+      this.head.material.opacity = Math.min(1, this.headT / 0.15) * 0.45;
       this.head.visible = true;
     } else { this.head.visible = false; if (n) this.camDist = camera.position.distanceTo(this.tPts[n - 1].p); }
     this.trail.geometry.attributes.position.needsUpdate = this.trail.geometry.attributes.color.needsUpdate = true;
@@ -348,6 +348,13 @@ export const sfx = {
   },
   putt: () => { noise(0.008, 4500, 2500, 0.3, 'highpass', 0.7); tone(1150, 0.03, 0.28, 'sine'); tone(640, 0.05, 0.24, 'sine', 0, 0.7); }, // 推桿：輕輕的一聲「叩」
   bounce: (v = 1) => { tone(140, 0.1, Math.min(0.5, 0.2 * v), 'sine', 0, 0.5); noise(0.08, 900, 300, Math.min(0.3, 0.12 * v), 'lowpass'); },
+  // 撞到樹幹（悶的「叩」）、岩石（清脆的「喀」）、枝葉（沙沙聲）
+  knock: (kind, v = 1) => {
+    const g = Math.min(1, 0.35 + v * 0.5);
+    if (kind === 'leaf') { noise(0.28, 5200, 1800, 0.34 * g, 'bandpass', 0.6); noise(0.18, 2600, 900, 0.2 * g, 'bandpass', 0.8, 0.05); }
+    else if (kind === 'wood') { noise(0.01, 3000, 1200, 0.5 * g, 'bandpass', 1); tone(310, 0.09, 0.5 * g, 'sine', 0, 0.6); tone(620, 0.05, 0.22 * g, 'triangle'); }
+    else { noise(0.012, 6500, 3000, 0.6 * g, 'highpass', 0.8); tone(1750, 0.04, 0.3 * g, 'sine'); tone(2600, 0.03, 0.16 * g, 'sine'); }
+  },
   sand: () => noise(0.3, 2400, 500, 0.5, 'bandpass', 0.6),
   splash: () => { noise(0.7, 1800, 300, 0.7, 'lowpass'); tone(300, 0.25, 0.3, 'sine', 0, 0.3); },
   cup: () => { for (let i = 0; i < 4; i++) tone(700 + i * 90, 0.05, 0.3, 'square', i * 0.06); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, 0.22, 'triangle', 0.3 + i * 0.1)); },

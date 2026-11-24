@@ -99,7 +99,61 @@ export class Ball {
     return null;
   }
 
+  // 樹幹、岩石反彈；樹冠、灌木把球擋下來（每個障礙物進去一次只算一次）
+  collide(hole) {
+    const obs = hole.obstacles; if (!obs) return;
+    const p = this.pos, v = this.vel, roll = this.mode === 'roll';
+    for (let i = 0; i < obs.length; i++) {
+      const o = obs[i], dx = p.x - o.x, dz = p.z - o.z, d2 = dx * dx + dz * dz;
+      let rad = o.r;
+      if (d2 > (rad + BALL_R) * (rad + BALL_R)) { if (this.inSoft === o) this.inSoft = null; continue; }
+      if (o.kind === 'trunk') {
+        if (p.y < o.y0 || p.y > o.y1) continue;
+        vN.set(dx, 0, dz);
+      } else if (o.kind === 'cone') {
+        if (p.y < o.y0 || p.y > o.y1) { if (this.inSoft === o) this.inSoft = null; continue; }
+        rad = o.r * (1 - (p.y - o.y0) / (o.y1 - o.y0));
+        if (d2 > rad * rad) { if (this.inSoft === o) this.inSoft = null; continue; }
+      } else {
+        const dy = p.y - o.y;
+        if (d2 + dy * dy > (rad + BALL_R) * (rad + BALL_R)) { if (this.inSoft === o) this.inSoft = null; continue; }
+        vN.set(dx, roll ? 0 : dy, dz);
+      }
+      if (o.kind === 'cone' || o.soft) { // 枝葉：速度大減、往下掉
+        if (this.inSoft === o) continue;
+        this.inSoft = o;
+        const sp = v.length();
+        if (sp < 1.5) continue;
+        v.multiplyScalar(o.kind === 'cone' ? 0.32 : 0.28);
+        if (!roll) v.y = Math.min(v.y, 0) - 0.6;
+        this.spinS = 0; this.spinB = 1;
+        this.onHit?.('leaf', sp, p);
+        continue;
+      }
+      const len = vN.length(); if (len < 1e-5) continue;
+      vN.multiplyScalar(1 / len);
+      const vn = v.dot(vN);
+      // 推到表面外，避免卡在裡面
+      const push = rad + BALL_R - len;
+      if (push > 0) p.addScaledVector(vN, push);
+      if (vn >= 0) continue;
+      const sp = v.length(), e = o.kind === 'trunk' ? 0.45 : 0.55;
+      v.addScaledVector(vN, -(1 + e) * vn);
+      const vn2 = v.dot(vN);
+      vA.copy(vN).multiplyScalar(vn2);
+      v.sub(vA).multiplyScalar(0.8).add(vA); // 切向也損失一些
+      if (roll) v.y = 0;
+      this.spinS = 0; this.spinB = 1;
+      this.onHit?.(o.kind === 'trunk' ? 'wood' : 'rock', sp, p);
+    }
+  }
+
   step(h, hole, wind) {
+    const ev = this.stepCore(h, hole, wind);
+    if (!ev && this.mode !== 'rest') this.collide(hole);
+    return ev;
+  }
+  stepCore(h, hole, wind) {
     const p = this.pos, v = this.vel;
     // 進洞判定
     const dx = p.x - hole.pin.x, dz = p.z - hole.pin.z;

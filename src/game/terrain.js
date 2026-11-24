@@ -218,10 +218,14 @@ export function buildHole(course, index) {
   greenGrid.visible = false;
   group.add(greenGrid);
   // 坡度光點：一顆顆小光點順著坡往低處流，流得越快表示越陡（推桿時才顯示）
-  const FN = 280, fPos = new Float32Array(FN * 3), fLife = new Float32Array(FN);
+  // 光點用柔邊小圓點貼圖（預設的點是方塊，放大看像雜訊）
+  const dotCv = document.createElement('canvas'); dotCv.width = dotCv.height = 32;
+  { const g = dotCv.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); }
+  const dotTex = new THREE.CanvasTexture(dotCv);
+  const FN = 150, fPos = new Float32Array(FN * 3), fLife = new Float32Array(FN);
   const fSpawn = (i) => { const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * greenR; fPos[i * 3] = pinXZ.x + Math.cos(a) * rr; fPos[i * 3 + 2] = pinXZ.z + Math.sin(a) * rr; fLife[i] = 0.8 + Math.random() * 1.8; };
   for (let i = 0; i < FN; i++) { fSpawn(i); fPos[i * 3 + 1] = heightAt(fPos[i * 3], fPos[i * 3 + 2]) + 0.09; }
-  const flowPts = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(fPos, 3)), new THREE.PointsMaterial({ color: '#ffffff', size: 0.13, sizeAttenuation: true, transparent: true, opacity: 0.95, depthWrite: false }));
+  const flowPts = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(fPos, 3)), new THREE.PointsMaterial({ color: '#ffffff', map: dotTex, size: 0.085, sizeAttenuation: true, transparent: true, opacity: 0.6, depthWrite: false }));
   flowPts.visible = false; flowPts.frustumCulled = false; group.add(flowPts);
   const greenFlow = { points: flowPts, update(dt) {
     for (let i = 0; i < FN; i++) {
@@ -333,6 +337,25 @@ export function buildHole(course, index) {
     }
   }
 
+  // —— 球會撞到的障礙物 ——
+  // hard：樹幹（直立圓柱）、岩石（球體），球會反彈；soft：樹冠、灌木，球穿過時被枝葉擋下來、速度大減
+  const obstacles = [];
+  const pine = course.tree === 'pine';
+  for (const t of spots) {
+    const sy = t.s * (0.9 + (t.r % 1) * 0.3), y = t.y - 0.1;
+    if (pine) {
+      obstacles.push({ kind: 'trunk', x: t.x, z: t.z, r: 0.3 * t.s, y0: y, y1: y + 1.6 * sy });
+      obstacles.push({ kind: 'cone', x: t.x, z: t.z, r: 2.0 * t.s, y0: y + 1.6 * sy, y1: y + 8.6 * sy }); // 樹冠：下寬上尖
+    } else { // 棕櫚：樹幹彎向一側，樹冠在頂端
+      const tx = t.x + (Math.cos(t.r) * 0.9 + Math.sin(t.r) * 0.2) * t.s, tz = t.z + (-Math.sin(t.r) * 0.9 + Math.cos(t.r) * 0.2) * t.s;
+      obstacles.push({ kind: 'trunk', x: t.x, z: t.z, r: 0.24 * t.s, y0: y, y1: y + 5.6 * sy });
+      obstacles.push({ kind: 'ball', soft: true, x: tx, z: tz, y: y + 6.3 * sy, r: 2.1 * t.s });
+    }
+  }
+  for (const c of cullable) for (const t of c.list) {
+    if (c.rad < 1.4) obstacles.push({ kind: 'ball', x: t.x, z: t.z, y: t.y + 0.15 * t.s, r: 0.78 * t.s }); // 岩石
+    else obstacles.push({ kind: 'ball', soft: true, x: t.x, z: t.z, y: t.y + 0.5 * t.s, r: 0.95 * t.s }); // 灌木
+  }
   // 隱藏擋在鏡頭與目標之間的樹（a、b 為世界座標，只看水平距離）
   const hidden = new Uint8Array(spots.length);
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -376,5 +399,5 @@ export function buildHole(course, index) {
     group.traverse((o) => { o.geometry?.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
   }
 
-  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, shore, landmarks, greenGrid, greenFlow, path, bunkers, waters, dispose };
+  return { spec, group, heightAt, gradAt, normalAt, surfaceAt, distPath, pathPoint, tee, pin, flag, seaLevel, len, greenR, cullTrees, waterMeshes, shore, landmarks, greenGrid, greenFlow, path, bunkers, waters, obstacles, dispose };
 }

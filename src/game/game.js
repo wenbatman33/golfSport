@@ -185,6 +185,10 @@ export async function startGame({ character, course, onExit }) {
     mesh.castShadow = true;
     const g = new Golfer();
     scene.add(mesh, dot, g.root);
+    b.onHit = (kind, sp, p) => { // 撞到樹幹、岩石或枝葉
+      sfx.knock(kind, sp / 25);
+      fx.emit(p, kind === 'leaf' ? { count: 16, speed: 1.6, up: 1.2, spread: 1, gravity: 4, life: 0.9, size: 0.09, colors: ['#4f9a3a', '#6bbf4c', '#9bd06a'] } : { count: 8, speed: 1.8, up: 1.5, spread: 1, life: 0.4, size: 0.06, colors: kind === 'wood' ? ['#8a6a45', '#b08a5a'] : ['#cfcac0', '#9a968e'] });
+    };
     b.onBounce = (surf, sp, p) => { fx.land(p, surf, sp / 12); if (surf === 'bunker') sfx.sand(); else sfx.bounce(sp / 8); };
     return { ch, ai, ball: b, mesh, dot, golfer: g, stats: ch.stats, powerFactor: 0.82 + ch.stats.power * 0.03, lastPos: new THREE.Vector3(), scores: [], strokes: 0, done: false, points: 0, shotLie: 'tee' };
   };

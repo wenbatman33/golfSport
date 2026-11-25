@@ -40,6 +40,17 @@ window.setPose = (name) => {
   document.getElementById('t').textContent = `${name}${row != null ? ` · 第 ${+row + 1} 排` : ''}`;
   return name;
 };
+window.blend = (a, b, k) => { for (const g of golfers) { g.emote = null; g.applyBlend(a, b, k); g.club.visible = false; } document.getElementById('t').textContent = `${a}→${b} ${k}`; return k; }; // 檢查兩個姿勢之間的過渡
+// 量測用：改姿勢規格後重新求解，並回報雙手、頭、胸在角色座標裡的位置（單位：身高比例）
+window.golfers = golfers; window.POSES = POSES;
+window.resolve = (name) => { for (const g of golfers) g.poseQ[name] = g.solvePose(POSES[name]); };
+window.measure = (a, b = a, k = 0) => golfers.map((g) => {
+  g.applyBlend(a, b, k); g.root.updateMatrixWorld(true);
+  const P = (n) => g.root.worldToLocal(g.bones[n].getWorldPosition(new THREE.Vector3())).divideScalar(g.height);
+  const f = (v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+  const lh = P('LeftHand'), rh = P('RightHand'), hd = P('Head'), mid = lh.clone().add(rh).multiplyScalar(0.5);
+  return { lh: f(lh), rh: f(rh), head: f(hd), chest: f(P('Spine2')), le: f(P('LeftForeArm')), re: f(P('RightForeArm')), hands: +lh.distanceTo(rh).toFixed(2), toHead: +mid.distanceTo(hd).toFixed(2) };
+});
 window.setYaw = (deg) => { for (const g of golfers) g.root.rotation.y = (deg * Math.PI) / 180; };
 window.setPose(q.get('pose') || 'stand');
 

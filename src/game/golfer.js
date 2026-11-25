@@ -17,6 +17,23 @@ const LEGS = {
 // 手指彎曲的軸與方向（Mixamo 骨架：手指骨頭的局部座標）
 const FIST_AXIS = new THREE.Vector3(0, 0, 1), FIST_SIGN = -1;
 
+// —— 待機手勢的手臂定位（角色座標：+X 是角色的左手邊、+Y 向上、+Z 是正面）——
+// 叉腰：拳頭抵在腰側，手肘往外、略往後
+const HIPS_IK = {
+  Left: (m) => ({ hand: [m.waistX + 0.048 * m.h, m.yHips + 0.055 * m.h, m.zc + 0.012 * m.h], pole: [1, 0.15, -0.55] }),
+  Right: (m) => ({ hand: [-m.waistX - 0.048 * m.h, m.yHips + 0.055 * m.h, m.zc + 0.012 * m.h], pole: [-1, 0.15, -0.55] }),
+};
+// 伸展：右手臂橫過胸前伸直，左手從下方勾住右前臂往身體帶
+const stretchIK = (k) => ({
+  Right: (m) => ({ hand: [(0.17 + 0.02 * k) * m.h, m.ySh - 0.015 * m.h, m.chestZ + (0.05 - 0.008 * k) * m.h], pole: [0, -1, 0.4] }),
+  Left: (m) => ({ hand: [(0.045 + 0.015 * k) * m.h, m.ySh - 0.06 * m.h, m.chestZ + (0.1 - 0.008 * k) * m.h], pole: [0.8, -1, 0.3] }),
+});
+// 思考：左手叉腰，右手握拳抵著下巴（角色手臂偏短，橫抱在肚子前會伸不到而顯得僵硬）
+const thinkIK = (k) => ({
+  Left: HIPS_IK.Left,
+  Right: (m) => ({ hand: [(-0.04 + 0.008 * k) * m.h, m.yHead - 0.1 * m.h, m.chestZ + (0.065 + 0.006 * k) * m.h], pole: [-0.5, -1, 0.3] }),
+});
+
 export const POSES = {
   address: {
     eul: LEAN,
@@ -82,12 +99,13 @@ export const POSES = {
   waveB: { eul: { Head: [0, 0, -5] }, dir: { RightShoulder: [-0.94, 0.3, 0.05, 'Spine2'], RightArm: [-0.86, 0.3, 0.3, 'Spine2'], RightForeArm: [-0.6, 0.78, 0.15, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
   scratchA: { eul: { Head: [8, 0, 8], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.8, 0.15, 0.58, 'Spine2'], RightForeArm: [0.65, 0.72, -0.25, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
   scratchB: { eul: { Head: [10, 0, 10], Spine2: [0, 0, 3] }, dir: { RightShoulder: [-0.9, 0.4, 0.15, 'Spine2'], RightArm: [-0.8, 0.2, 0.56, 'Spine2'], RightForeArm: [0.58, 0.76, -0.3, 'Spine2'], LeftArm: [0.3, -0.94, 0.08, 'Spine2'], LeftForeArm: [0.2, -0.96, 0.18, 'Spine2'] }, flat: [] },
-  hipsA: { eul: { Spine1: [0, 10, 0], Head: [0, 14, 0] }, dir: { LeftArm: [0.78, -0.6, -0.15, 'Spine2'], LeftForeArm: [-0.5, -0.6, 0.55, 'Spine2'], RightArm: [-0.78, -0.6, -0.15, 'Spine2'], RightForeArm: [0.5, -0.6, 0.55, 'Spine2'] }, flat: [] },
-  hipsB: { eul: { Spine1: [0, -10, 0], Head: [0, -14, 0] }, dir: { LeftArm: [0.78, -0.6, -0.15, 'Spine2'], LeftForeArm: [-0.5, -0.6, 0.55, 'Spine2'], RightArm: [-0.78, -0.6, -0.15, 'Spine2'], RightForeArm: [0.5, -0.6, 0.55, 'Spine2'] }, flat: [] },
-  stretchA: { eul: { Spine1: [0, 12, 0], Head: [0, 8, 0] }, dir: { RightArm: [0.82, 0.02, 0.57, 'Spine2'], RightForeArm: [0.95, 0.05, 0.3, 'Spine2'], LeftArm: [0.25, -0.62, 0.74, 'Spine2'], LeftForeArm: [-0.6, 0.35, 0.72, 'Spine2'] }, flat: [] },
-  stretchB: { eul: { Spine1: [0, 18, 0], Head: [0, 12, 0] }, dir: { RightArm: [0.88, 0.02, 0.47, 'Spine2'], RightForeArm: [0.98, 0.05, 0.18, 'Spine2'], LeftArm: [0.3, -0.6, 0.74, 'Spine2'], LeftForeArm: [-0.55, 0.38, 0.74, 'Spine2'] }, flat: [] },
-  thinkA: { eul: { Head: [6, -8, 0] }, dir: { RightArm: [-0.05, -0.92, 0.38, 'Spine2'], RightForeArm: [0.35, 0.72, 0.6, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
-  thinkB: { eul: { Head: [2, 10, 4] }, dir: { RightArm: [-0.05, -0.92, 0.38, 'Spine2'], RightForeArm: [0.3, 0.75, 0.6, 'Spine2'], LeftArm: [0.15, -0.85, 0.5, 'Spine2'], LeftForeArm: [-0.92, 0.05, 0.38, 'Spine2'] }, flat: [] },
+  // 叉腰、伸展、思考：手要貼在身體表面外，位置依每位角色量到的體型決定（m：measureBody 的結果）
+  hipsA: { eul: { Spine1: [0, 10, 0], Head: [0, 14, 0] }, fist: ['Left', 'Right'], ik: HIPS_IK, flat: [] },
+  hipsB: { eul: { Spine1: [0, -10, 0], Head: [0, -14, 0] }, fist: ['Left', 'Right'], ik: HIPS_IK, flat: [] },
+  stretchA: { eul: { Spine1: [0, 10, 0], Head: [0, 6, 0] }, ik: stretchIK(0), flat: [] },
+  stretchB: { eul: { Spine1: [0, 16, 0], Head: [0, 10, 0] }, ik: stretchIK(1), flat: [] },
+  thinkA: { eul: { Head: [6, -8, 0] }, fist: ['Left', 'Right'], ik: thinkIK(0), flat: [] },
+  thinkB: { eul: { Head: [2, 10, 4] }, fist: ['Left', 'Right'], ik: thinkIK(1), flat: [] },
   sad: {
     eul: { Spine: [12, 0, 0], Spine1: [10, 0, 0], Spine2: [8, 0, 0], Neck: [14, 0, 0], Head: [22, 0, 0] },
     dir: { LeftArm: [0.26, -0.94, 0.2, 'Spine2'], LeftForeArm: [0.16, -0.95, 0.27, 'Spine2'], RightArm: [-0.26, -0.94, 0.2, 'Spine2'], RightForeArm: [-0.16, -0.95, 0.27, 'Spine2'] },
@@ -162,8 +180,10 @@ export class Golfer {
       const rec = { local: b.quaternion.clone(), world: b.getWorldQuaternion(new THREE.Quaternion()), parentWorld: b.parent.getWorldQuaternion(new THREE.Quaternion()) };
       const child = this.bones[CHILD[name]];
       if (child) rec.dir = child.getWorldPosition(wc).sub(b.getWorldPosition(wp)).normalize().clone();
+      rec.pos = this.root.worldToLocal(b.getWorldPosition(new THREE.Vector3())); // 靜止姿勢下的位置（角色座標）
       this.rest[name] = rec;
     }
+    this.measureBody();
     for (const [name, spec] of Object.entries(POSES)) this.poseQ[name] = this.solvePose(spec);
     this.applyBlend('stand', 'stand', 0);
   }
@@ -180,10 +200,53 @@ export class Golfer {
     this.root.add(this.model);
   }
 
+  // 量身體厚度：靜止姿勢下手臂是張開的，從正面與側面打射線就能量到胸、腹、腰的表面位置。
+  // 每位角色體型差很多（壯漢的胸與腰厚得多），手要放在身體「表面外」就得各自量。
+  measureBody() {
+    const h = this.height, R = this.rest, rc = new THREE.Raycaster(), o = new THREE.Vector3(), d = new THREE.Vector3();
+    const meshes = []; this.model.traverse((m) => { if (m.isMesh) meshes.push(m); });
+    const cast = (ox, oy, oz, dx, dz, axis, lim) => { // 回傳離身體中心最遠、但不超過 lim 的表面位置（超過的是張開的手臂）
+      o.set(ox, oy, oz); d.set(dx, 0, dz); this.root.localToWorld(o); d.transformDirection(this.root.matrixWorld);
+      rc.set(o, d); let best = null;
+      for (const hit of rc.intersectObjects(meshes, false)) { const v = Math.abs(this.root.worldToLocal(hit.point.clone())[axis] - (axis === 'z' ? R.Hips.pos.z : 0)); if (v < lim && (best == null || v > best)) best = v; }
+      return best;
+    };
+    const front = (y) => Math.max(...[-0.04, 0, 0.04].map((x) => cast(x * h, y, 3, 0, -1, 'z', 0.3 * h) ?? 0.07 * h));
+    // 腰的半寬：從正面一路往外掃，第一個打不到身體的位置就是腰側（再往外是張開的手臂，中間有空隙）
+    const side = (y) => { for (let x = 0.06; x <= 0.19; x += 0.012) if (cast(x * h, y, 3, 0, -1, 'z', 0.3 * h) == null) return x * h; return 0.13 * h; };
+    const zc = R.Hips.pos.z;
+    this.meas = {
+      h, zc, ySh: R.LeftArm.pos.y, yHead: R.Head.pos.y, yHips: R.Hips.pos.y, shX: Math.abs(R.LeftArm.pos.x),
+      chestZ: zc + front(R.LeftArm.pos.y - 0.04 * h), // 胸口正面
+      bellyZ: zc + front(R.Spine1.pos.y), // 肚子正面
+      waistX: side(R.Hips.pos.y + 0.05 * h), // 腰側（叉腰的位置）
+    };
+  }
+
   // 把姿勢規格解成每根骨頭的 local quaternion
   solvePose(spec) {
     const D = {}; // 骨頭相對靜止姿勢的模型空間旋轉
     const ident = new THREE.Quaternion();
+    // 骨頭在這個姿勢下的位置（只用到脊椎與肩膀，手臂本身還沒解）
+    const fk = (name) => {
+      const b = this.bones[name], pName = b.parent.isBone ? b.parent.name.replace(/^mixamorig:?/, '') : null;
+      if (!pName) return this.rest[name].pos.clone();
+      return this.rest[name].pos.clone().sub(this.rest[pName].pos).applyQuaternion(getD(pName)).add(fk(pName));
+    };
+    // 手臂 IK：指定手腕要到的位置（角色座標）與手肘偏向哪邊，反推上臂與前臂的方向
+    const ikCache = {};
+    const ikOf = (side) => {
+      if (side in ikCache) return ikCache[side];
+      let ik = spec.ik?.[side]; if (typeof ik === 'function') ik = ik(this.meas);
+      if (!ik) return (ikCache[side] = null);
+      const S = fk(side + 'Arm'), T = new THREE.Vector3(...ik.hand), R = this.rest;
+      const a = R[side + 'ForeArm'].pos.distanceTo(R[side + 'Arm'].pos), bl = R[side + 'Hand'].pos.distanceTo(R[side + 'ForeArm'].pos);
+      const n = T.clone().sub(S); const dist = Math.min(n.length(), (a + bl) * 0.995); n.normalize();
+      const x = (a * a - bl * bl + dist * dist) / (2 * dist), y = Math.sqrt(Math.max(0, a * a - x * x));
+      const pole = new THREE.Vector3(...ik.pole); pole.addScaledVector(n, -pole.dot(n)).normalize();
+      const E = S.clone().addScaledVector(n, x).addScaledVector(pole, y), W = S.clone().addScaledVector(n, dist);
+      return (ikCache[side] = { Arm: E.clone().sub(S).normalize(), ForeArm: W.sub(E).normalize() });
+    };
     const getD = (name) => {
       if (name === 'root' || !this.bones[name]) return ident;
       if (D[name]) return D[name];
@@ -192,9 +255,10 @@ export class Golfer {
       const Dp = pName ? getD(pName) : ident;
       let d = Dp;
       const e = spec.eul?.[name], dr = spec.dir?.[name];
+      const im = /^(Left|Right)(Arm|ForeArm)$/.exec(name), ik = im && spec.ik ? ikOf(im[1]) : null;
       if (e) d = Dp.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(e[0] * D2R, e[1] * D2R, e[2] * D2R, 'YXZ')));
-      else if (dr && this.rest[name].dir) {
-        const target = new THREE.Vector3(dr[0], dr[1], dr[2]).normalize().applyQuaternion(getD(dr[3]));
+      else if ((ik || dr) && this.rest[name].dir) {
+        const target = ik ? ik[im[2]].clone() : new THREE.Vector3(dr[0], dr[1], dr[2]).normalize().applyQuaternion(getD(dr[3]));
         const cur = this.rest[name].dir.clone().applyQuaternion(Dp);
         d = new THREE.Quaternion().setFromUnitVectors(cur, target).multiply(Dp);
         // 手臂自然下垂時把上臂內旋，手掌才會朝向身體而不是朝前（模型原始站姿是掌心向前）
